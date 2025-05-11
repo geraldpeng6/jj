@@ -28,9 +28,9 @@ quant_mcp/
 │   └── tools/              # 工具模块
 │       └── kline_tools.py  # K线数据工具
 ├── utils/                  # 工具函数
-│   ├── api_client.py       # API客户端
 │   ├── auth_utils.py       # 认证工具
 │   ├── chart_generator.py  # 图表生成器
+│   ├── kline_utils.py      # K线数据工具
 │   └── logging_utils.py    # 日志工具
 ├── .gitignore              # Git 忽略文件
 ├── requirements.txt        # 项目依赖
