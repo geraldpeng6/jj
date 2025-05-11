@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ title }}</title>
+    <!-- 引入 ECharts -->
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    <style>
+        body {
+            font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f5f5f5;
+            color: #333;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .header {
+            background-color: #fff;
+            padding: 15px 20px;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .header-left {
+            display: flex;
+            flex-direction: column;
+        }
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            color: #666;
+            font-size: 14px;
+        }
+        .header-tag {
+            background-color: #f5f5f5;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            color: #555;
+        }
+        .chart-container {
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .metrics-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            background-color: #fff;
+            padding: 15px 20px;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .metric-card {
+            flex: 1;
+            min-width: 120px;
+            padding: 10px 15px;
+            border-radius: 5px;
+            background-color: #f9f9f9;
+            text-align: center;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
+        .metric-value {
+            font-size: 20px;
+            font-weight: 600;
+            margin: 5px 0;
+        }
+        .metric-label {
+            font-size: 12px;
+            color: #666;
+        }
+        .metric-unit {
+            font-size: 12px;
+            color: #999;
+        }
+        .footer {
+            text-align: right;
+            padding: 3px 8px;
+            color: #aaa;
+            font-size: 10px;
+            position: fixed;
+            bottom: 5px;
+            right: 10px;
+            background-color: rgba(255, 255, 255, 0.8);
+            border-radius: 3px;
+            z-index: 1000;
+            line-height: 1;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
+        h1 {
+            margin: 0;
+            color: #333;
+            font-size: 24px;
+        }
+        h2 {
+            margin: 0 0 15px 0;
+            color: #333;
+            font-size: 18px;
+        }
+        .subtitle {
+            color: #666;
+            font-size: 14px;
+            margin-top: 5px;
+        }
+        .chart {
+            width: 100%;
+            height: 400px;
+        }
+        .kline-chart {
+            width: 100%;
+            height: 500px;
+        }
+        .positive {
+            color: #e53935;
+        }
+        .negative {
+            color: #43a047;
+        }
+        .neutral {
+            color: #424242;
+        }
+        .date-range-info {
+            font-size: 13px;
+            color: #666;
+            display: inline-block;
+            margin-left: 10px;
+            font-weight: normal;
+        }
+        .strategy-info {
+            font-size: 12px;
+            color: #777;
+            display: inline-block;
+            margin-left: 15px;
+            font-weight: normal;
+        }
+        .strategy-tag {
+            background-color: #f5f5f5;
+            padding: 2px 6px;
+            border-radius: 3px;
+            margin-right: 5px;
+            color: #555;
+            font-size: 11px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="metrics-container">
+            <div class="metric-card">
+                <div class="metric-label">总收益</div>
+                <div class="metric-value {% if metrics.total_return > 0 %}positive{% elif metrics.total_return < 0 %}negative{% else %}neutral{% endif %}">
+                    {{ metrics.total_return }}
+                    <span class="metric-unit">%</span>
+                </div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">年化收益</div>
+                <div class="metric-value {% if metrics.annual_return > 0 %}positive{% elif metrics.annual_return < 0 %}negative{% else %}neutral{% endif %}">
+                    {{ metrics.annual_return }}
+                    <span class="metric-unit">%</span>
+                </div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">基准收益</div>
+                <div class="metric-value {% if metrics.benchmark_return > 0 %}positive{% elif metrics.benchmark_return < 0 %}negative{% else %}neutral{% endif %}">
+                    {{ metrics.benchmark_return }}
+                    <span class="metric-unit">%</span>
+                </div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">基准年化</div>
+                <div class="metric-value {% if metrics.benchmark_annual > 0 %}positive{% elif metrics.benchmark_annual < 0 %}negative{% else %}neutral{% endif %}">
+                    {{ metrics.benchmark_annual }}
+                    <span class="metric-unit">%</span>
+                </div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">所有已平仓交易</div>
+                <div class="metric-value neutral">
+                    {{ metrics.trade_count }}
+                    <span class="metric-unit">笔</span>
+                </div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">胜率</div>
+                <div class="metric-value {% if metrics.win_rate > 50 %}positive{% elif metrics.win_rate < 50 %}negative{% else %}neutral{% endif %}">
+                    {{ metrics.win_rate }}
+                    <span class="metric-unit">%</span>
+                </div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">夏普比率</div>
+                <div class="metric-value {% if metrics.sharpe_ratio > 0 %}positive{% elif metrics.sharpe_ratio < 0 %}negative{% else %}neutral{% endif %}">
+                    {{ metrics.sharpe_ratio }}
+                </div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">最大回撤</div>
+                <div class="metric-value negative">
+                    {{ metrics.max_drawdown }}
+                    <span class="metric-unit">%</span>
+                </div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">平均交易</div>
+                <div class="metric-value {% if metrics.avg_trade > 0 %}positive{% elif metrics.avg_trade < 0 %}negative{% else %}neutral{% endif %}">
+                    {{ metrics.avg_trade }}
+                    <span class="metric-unit">%</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="chart-container">
+            <h2 style="margin-top: 0; margin-bottom: 15px; font-size: 16px; color: #555;">
+                资产价值走势<span class="date-range-info">{{ date_range }}</span>
+                <span class="strategy-info">
+                    <span class="strategy-tag">{{ strategy_name }}</span>
+                    <span class="strategy-tag">ID: {{ strategy_id }}</span>
+                </span>
+            </h2>
+            <div id="value-chart" class="chart"></div>
+        </div>
+
+        <div class="chart-container">
+            <h2 style="margin-top: 0; margin-bottom: 15px; font-size: 16px; color: #555;">
+                K线图表<span class="date-range-info">{{ date_range }}</span>
+                <span class="strategy-info">
+                    <span class="strategy-tag">{{ symbol }}</span>
+                    {% if exchange %}<span class="strategy-tag">{{ exchange }}</span>{% endif %}
+                </span>
+            </h2>
+            <div id="kline-chart" class="kline-chart"></div>
+        </div>
+
+        <div class="footer">
+            <span>{{ generation_time }}</span>
+        </div>
+    </div>
+
+    <script>
+        // 解析JSON数据
+        const chartData = {{ chart_data|safe }};
+
+        // 初始化资产价值图表
+        const valueChartDom = document.getElementById('value-chart');
+        const valueChart = echarts.init(valueChartDom);
+
+        // 资产价值图表配置
+        const valueOption = {
+            tooltip: {
+                trigger: 'axis',
+                axisPointer: {
+                    type: 'cross'
+                }
+            },
+            legend: {
+                data: ['总资产', '现金', '持仓']
+            },
+            grid: {
+                left: '3%',
+                right: '4%',
+                bottom: '3%',
+                containLabel: true
+            },
+            xAxis: {
+                type: 'category',
+                boundaryGap: false,
+                data: chartData.dates
+            },
+            yAxis: {
+                type: 'value',
+                axisLabel: {
+                    formatter: '{value} 元'
+                }
+            },
+            series: [
+                {
+                    name: '总资产',
+                    type: 'line',
+                    data: chartData.values,
+                    smooth: true,
+                    lineStyle: {
+                        width: 3
+                    },
+                    itemStyle: {
+                        color: '#1976D2'
+                    }
+                },
+                {
+                    name: '现金',
+                    type: 'line',
+                    data: chartData.cash_values,
+                    smooth: true,
+                    lineStyle: {
+                        width: 2
+                    },
+                    itemStyle: {
+                        color: '#43A047'
+                    }
+                },
+                {
+                    name: '持仓',
+                    type: 'line',
+                    data: chartData.position_values,
+                    smooth: true,
+                    lineStyle: {
+                        width: 2
+                    },
+                    itemStyle: {
+                        color: '#E53935'
+                    }
+                }
+            ]
+        };
+
+        // 使用配置项显示图表
+        valueChart.setOption(valueOption);
+
+        // 如果有K线数据，初始化K线图表
+        if (chartData.kline_data) {
+            const klineChartDom = document.getElementById('kline-chart');
+            const klineChart = echarts.init(klineChartDom);
+
+            // K线图表配置
+            const klineOption = {
+                animation: false,
+                legend: {
+                    bottom: 10,
+                    left: 'center',
+                    data: ['K线', 'MA5', 'MA10', 'MA20', 'MA30']
+                },
+                tooltip: {
+                    trigger: 'axis',
+                    axisPointer: {
+                        type: 'cross'
+                    },
+                    borderWidth: 1,
+                    borderColor: '#ccc',
+                    padding: 10,
+                    textStyle: {
+                        color: '#000'
+                    }
+                },
+                axisPointer: {
+                    link: [{xAxisIndex: 'all'}],
+                    label: {
+                        backgroundColor: '#777'
+                    }
+                },
+                toolbox: {
+                    feature: {
+                        dataZoom: {
+                            yAxisIndex: false
+                        },
+                        brush: {
+                            type: ['lineX', 'clear']
+                        }
+                    }
+                },
+                brush: {
+                    xAxisIndex: 'all',
+                    brushLink: 'all',
+                    outOfBrush: {
+                        colorAlpha: 0.1
+                    }
+                },
+                visualMap: {
+                    show: false,
+                    seriesIndex: 5,
+                    dimension: 2,
+                    pieces: [{
+                        value: 1,
+                        color: '#f44336'
+                    }, {
+                        value: -1,
+                        color: '#4caf50'
+                    }]
+                },
+                grid: [
+                    {
+                        left: '10%',
+                        right: '8%',
+                        height: '50%'
+                    },
+                    {
+                        left: '10%',
+                        right: '8%',
+                        top: '63%',
+                        height: '16%'
+                    }
+                ],
+                xAxis: [
+                    {
+                        type: 'category',
+                        data: chartData.kline_data.categoryData,
+                        scale: true,
+                        boundaryGap: false,
+                        axisLine: {onZero: false},
+                        splitLine: {show: false},
+                        min: 'dataMin',
+                        max: 'dataMax',
+                        axisPointer: {
+                            z: 100
+                        }
+                    },
+                    {
+                        type: 'category',
+                        gridIndex: 1,
+                        data: chartData.kline_data.categoryData,
+                        scale: true,
+                        boundaryGap: false,
+                        axisLine: {onZero: false},
+                        axisTick: {show: false},
+                        splitLine: {show: false},
+                        axisLabel: {show: false},
+                        min: 'dataMin',
+                        max: 'dataMax'
+                    }
+                ],
+                yAxis: [
+                    {
+                        scale: true,
+                        splitArea: {
+                            show: true
+                        }
+                    },
+                    {
+                        scale: true,
+                        gridIndex: 1,
+                        splitNumber: 2,
+                        axisLabel: {show: false},
+                        axisLine: {show: false},
+                        axisTick: {show: false},
+                        splitLine: {show: false}
+                    }
+                ],
+                dataZoom: [
+                    {
+                        type: 'inside',
+                        xAxisIndex: [0, 1],
+                        start: 0,
+                        end: 100
+                    },
+                    {
+                        show: true,
+                        xAxisIndex: [0, 1],
+                        type: 'slider',
+                        top: '85%',
+                        start: 0,
+                        end: 100
+                    }
+                ],
+                series: [
+                    {
+                        name: 'K线',
+                        type: 'candlestick',
+                        data: chartData.kline_data.values,
+                        itemStyle: {
+                            color: '#f44336',
+                            color0: '#4caf50',
+                            borderColor: '#f44336',
+                            borderColor0: '#4caf50'
+                        },
+                        tooltip: {
+                            formatter: function (param) {
+                                param = param[0];
+                                return [
+                                    '日期: ' + param.name + '<hr size=1 style="margin: 3px 0">',
+                                    '开盘价: ' + param.data[0] + '<br/>',
+                                    '收盘价: ' + param.data[1] + '<br/>',
+                                    '最低价: ' + param.data[2] + '<br/>',
+                                    '最高价: ' + param.data[3] + '<br/>'
+                                ].join('');
+                            }
+                        }
+                    },
+                    {
+                        name: 'MA5',
+                        type: 'line',
+                        data: chartData.kline_data.ma5,
+                        smooth: true,
+                        lineStyle: {
+                            opacity: 0.5
+                        }
+                    },
+                    {
+                        name: 'MA10',
+                        type: 'line',
+                        data: chartData.kline_data.ma10,
+                        smooth: true,
+                        lineStyle: {
+                            opacity: 0.5
+                        }
+                    },
+                    {
+                        name: 'MA20',
+                        type: 'line',
+                        data: chartData.kline_data.ma20,
+                        smooth: true,
+                        lineStyle: {
+                            opacity: 0.5
+                        }
+                    },
+                    {
+                        name: 'MA30',
+                        type: 'line',
+                        data: chartData.kline_data.ma30,
+                        smooth: true,
+                        lineStyle: {
+                            opacity: 0.5
+                        }
+                    },
+                    {
+                        name: '成交量',
+                        type: 'bar',
+                        xAxisIndex: 1,
+                        yAxisIndex: 1,
+                        data: chartData.kline_data.volumes
+                    }
+                ]
+            };
+
+            // 添加买卖点标记
+            for (const symbol in chartData.buy_points) {
+                const buyPoints = chartData.buy_points[symbol];
+                const sellPoints = chartData.sell_points[symbol];
+                
+                // 添加买入点
+                const buyData = [];
+                for (let i = 0; i < buyPoints.dates.length; i++) {
+                    const date = buyPoints.dates[i];
+                    const price = buyPoints.prices[i];
+                    const dateIndex = chartData.kline_data.categoryData.indexOf(date);
+                    if (dateIndex !== -1 && price > 0) {
+                        buyData.push([dateIndex, price]);
+                    }
+                }
+                
+                if (buyData.length > 0) {
+                    klineOption.series.push({
+                        name: '买入点',
+                        type: 'scatter',
+                        data: buyData,
+                        itemStyle: {
+                            color: '#FF5722'
+                        },
+                        symbolSize: 10,
+                        symbol: 'arrow',
+                        symbolRotate: 180,
+                        tooltip: {
+                            formatter: function(param) {
+                                return [
+                                    '买入点<hr size=1 style="margin: 3px 0">',
+                                    '日期: ' + chartData.kline_data.categoryData[param.data[0]] + '<br/>',
+                                    '价格: ' + param.data[1] + '<br/>'
+                                ].join('');
+                            }
+                        }
+                    });
+                }
+                
+                // 添加卖出点
+                const sellData = [];
+                for (let i = 0; i < sellPoints.dates.length; i++) {
+                    const date = sellPoints.dates[i];
+                    const price = sellPoints.prices[i];
+                    const dateIndex = chartData.kline_data.categoryData.indexOf(date);
+                    if (dateIndex !== -1 && price > 0) {
+                        sellData.push([dateIndex, price]);
+                    }
+                }
+                
+                if (sellData.length > 0) {
+                    klineOption.series.push({
+                        name: '卖出点',
+                        type: 'scatter',
+                        data: sellData,
+                        itemStyle: {
+                            color: '#4CAF50'
+                        },
+                        symbolSize: 10,
+                        symbol: 'arrow',
+                        tooltip: {
+                            formatter: function(param) {
+                                return [
+                                    '卖出点<hr size=1 style="margin: 3px 0">',
+                                    '日期: ' + chartData.kline_data.categoryData[param.data[0]] + '<br/>',
+                                    '价格: ' + param.data[1] + '<br/>'
+                                ].join('');
+                            }
+                        }
+                    });
+                }
+            }
+
+            // 使用配置项显示图表
+            klineChart.setOption(klineOption);
+        } else {
+            // 如果没有K线数据，隐藏K线图表容器
+            document.getElementById('kline-chart').parentNode.style.display = 'none';
+        }
+
+        // 响应窗口大小变化
+        window.addEventListener('resize', function() {
+            valueChart.resize();
+            if (chartData.kline_data) {
+                klineChart.resize();
+            }
+        });
+    </script>
+</body>
+</html>

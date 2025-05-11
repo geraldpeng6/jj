@@ -14,6 +14,8 @@ from mcp.server.fastmcp import FastMCP
 from utils.logging_utils import setup_logging
 from src.tools.kline_tools import register_tools as register_kline_tools
 from src.tools.symbol_tools import register_tools as register_symbol_tools
+from src.tools.strategy_tools import register_tools as register_strategy_tools
+from src.tools.backtest_tools import register_tools as register_backtest_tools
 
 # 设置日志
 logger = setup_logging('quant_mcp.server')
@@ -34,6 +36,8 @@ def create_server(name: str = "量化交易助手") -> FastMCP:
     # 注册工具
     register_kline_tools(mcp)
     register_symbol_tools(mcp)
+    register_strategy_tools(mcp)
+    register_backtest_tools(mcp)
 
     return mcp
 
@@ -51,6 +55,9 @@ def run_server(transport: str = 'stdio'):
         os.makedirs('data/charts', exist_ok=True)
         os.makedirs('data/temp', exist_ok=True)
         os.makedirs('data/config', exist_ok=True)
+        os.makedirs('data/strategy', exist_ok=True)
+        os.makedirs('data/backtest', exist_ok=True)
+        os.makedirs('data/templates', exist_ok=True)
 
         # 检查配置文件
         if not os.path.exists('data/config/auth.json'):

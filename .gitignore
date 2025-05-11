@@ -74,6 +74,7 @@ data/logs/
 data/temp/
 data/charts/
 data/klines/
+data/backtest/
 *.log
 
 # Keep config examples but ignore actual configs with credentials

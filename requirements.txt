@@ -3,6 +3,9 @@ mcp>=0.1.0  # Model Context Protocol
 pandas>=2.0.0
 requests>=2.28.0
 jinja2>=3.1.0
+numpy>=1.24.0
+paho-mqtt>=2.0.0  # MQTT客户端
+pysocks>=1.7.1  # SOCKS代理支持
 # 以下是内置模块，不需要安装
 # logging
 # webbrowser
@@ -10,3 +13,6 @@ jinja2>=3.1.0
 # pathlib
 # datetime
 # json
+# gzip
+# io
+# re

@@ -86,17 +86,20 @@ def get_headers() -> Dict[str, str]:
         return {}
 
     return {
+        'Host': 'api.yueniusz.com',
         'Authorization': f'Bearer {token}',
-        'Content-Type': 'application/json',
         'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36',
         'Accept': 'application/json, text/plain, */*',
-        'Origin': 'https://hitrader.yueniusz.com',
-        'Referer': 'https://hitrader.yueniusz.com/',
         'Sec-Ch-Ua': '"Chromium";v="136", "Google Chrome";v="136", "Not.A/Brand";v="99"',
+        'Content-Type': 'application/json',
         'Sec-Ch-Ua-Platform': '"macOS"',
         'Sec-Ch-Ua-Mobile': '?0',
+        'Origin': 'https://hitrader.yueniusz.com',
         'Sec-Fetch-Site': 'same-site',
         'Sec-Fetch-Mode': 'cors',
         'Sec-Fetch-Dest': 'empty',
-        'Accept-Language': 'zh-CN,zh;q=0.9'
+        'Referer': 'https://hitrader.yueniusz.com/',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'Accept-Language': 'zh-CN,zh;q=0.9',
+        'Priority': 'u=1, i'
     }
