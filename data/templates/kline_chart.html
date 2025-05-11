@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ title }} - K线图</title>
+    <!-- 引入 ECharts -->
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    <style>
+        body {
+            font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f5f5f5;
+            color: #333;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .header {
+            background-color: #fff;
+            padding: 15px 20px;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .header-left {
+            display: flex;
+            flex-direction: column;
+        }
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            color: #666;
+            font-size: 14px;
+        }
+        .header-tag {
+            background-color: #f5f5f5;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            color: #555;
+        }
+        .chart-container {
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .stats-container {
+            display: flex;
+            flex-direction: column;
+            background-color: #fff;
+            padding: 15px 20px;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .stats-row {
+            display: flex;
+            flex-wrap: nowrap;
+            gap: 20px;
+            align-items: center;
+        }
+        .stat-card {
+            flex: 1;
+            min-width: 100px;
+            padding: 8px 12px;
+            border-left: 3px solid #e0e0e0;
+            transition: all 0.3s ease;
+            position: relative;
+            background-color: #fafafa;
+            border-radius: 4px;
+        }
+        .stat-card:hover {
+            border-left-color: #1976D2;
+            background-color: #f5f5f5;
+        }
+        .stat-card:not(:last-child)::after {
+            content: '';
+            position: absolute;
+            right: -10px;
+            top: 25%;
+            height: 50%;
+            width: 1px;
+            background-color: #ddd;
+        }
+        .footer {
+            text-align: right;
+            padding: 3px 8px;
+            color: #aaa;
+            font-size: 10px;
+            position: fixed;
+            bottom: 5px;
+            right: 10px;
+            background-color: rgba(255, 255, 255, 0.8);
+            border-radius: 3px;
+            z-index: 1000;
+            line-height: 1;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
+        h1 {
+            margin: 0;
+            color: #333;
+            font-size: 24px;
+        }
+        h2 {
+            margin: 0 0 15px 0;
+            color: #333;
+            font-size: 18px;
+        }
+        .subtitle {
+            color: #666;
+            font-size: 14px;
+            margin-top: 5px;
+        }
+        .chart {
+            width: 100%;
+            height: 500px;
+        }
+        .stat-title {
+            font-size: 12px;
+            color: #555;
+            margin-bottom: 2px;
+            letter-spacing: 0.3px;
+            font-weight: 500;
+        }
+        .stat-value {
+            font-size: 16px;
+            font-weight: 600;
+            line-height: 1.2;
+        }
+        .stat-unit {
+            font-size: 11px;
+            color: #777;
+            margin-left: 1px;
+        }
+        .up {
+            color: #e53935; /* 红色，表示上涨 */
+        }
+        .down {
+            color: #43a047; /* 绿色，表示下跌 */
+        }
+        .unchanged {
+            color: #424242;
+        }
+        /* 经济学专业风格的颜色 */
+        .econ-positive {
+            color: #e53935;
+            font-weight: bold;
+        }
+        .econ-negative {
+            color: #43a047;
+            font-weight: bold;
+        }
+        .econ-neutral {
+            color: #424242;
+        }
+        .econ-highlight {
+            color: #1565C0;
+            font-weight: bold;
+        }
+        .date-range-info {
+            font-size: 13px;
+            color: #666;
+            display: inline-block;
+            margin-left: 10px;
+            font-weight: normal;
+        }
+        .stock-info {
+            font-size: 12px;
+            color: #777;
+            display: inline-block;
+            margin-left: 15px;
+            font-weight: normal;
+        }
+        .stock-tag {
+            background-color: #f5f5f5;
+            padding: 2px 6px;
+            border-radius: 3px;
+            margin-right: 5px;
+            color: #555;
+            font-size: 11px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="stats-container">
+            <h2 style="margin-top: 0; margin-bottom: 10px; font-size: 16px; color: #424242;">股票数据概览</h2>
+
+            <div class="stats-row">
+                <div class="stat-card">
+                    <div class="stat-title">数据点数</div>
+                    <div class="stat-value">{{ data_count }}</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-title">最高价</div>
+                    <div class="stat-value econ-positive">{{ highest_price }}</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-title">最低价</div>
+                    <div class="stat-value econ-negative">{{ lowest_price }}</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-title">涨跌幅</div>
+                    <div class="stat-value {{ price_change_class }}">{{ price_change }}<span class="stat-unit">%</span></div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-title">波动率</div>
+                    <div class="stat-value">{{ volatility }}<span class="stat-unit">%</span></div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-title">平均成交量</div>
+                    <div class="stat-value">{{ avg_volume }}</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="chart-container">
+            <h2 style="margin-top: 0; margin-bottom: 15px; font-size: 16px; color: #555;">
+                K线图表<span class="date-range-info">{{ date_range }}</span>
+                <span class="stock-info">
+                    <span class="stock-tag">{{ symbol }}.{{ exchange }}</span>
+                    <span class="stock-tag">{{ resolution }}</span>
+                    <span class="stock-tag">{{ fq_name }}</span>
+                </span>
+            </h2>
+            <div id="kline-chart" class="chart"></div>
+        </div>
+
+        <div class="footer">
+            <span>{{ generation_time }}</span>
+        </div>
+    </div>
+
+    <script>
+        // 解析JSON数据
+        const chartData = {{ kline_data|safe }};
+
+        // 初始化ECharts实例
+        const chartDom = document.getElementById('kline-chart');
+        const myChart = echarts.init(chartDom);
+
+        // 配置项
+        const option = {
+            animation: false,
+            legend: {
+                bottom: 10,
+                left: 'center',
+                data: ['K线', 'MA5', 'MA10', 'MA20', 'MA30']
+            },
+            tooltip: {
+                trigger: 'axis',
+                axisPointer: {
+                    type: 'cross'
+                },
+                borderWidth: 1,
+                borderColor: '#ccc',
+                padding: 10,
+                textStyle: {
+                    color: '#000'
+                },
+                position: function (pos, params, el, elRect, size) {
+                    const obj = {top: 10};
+                    obj[['left', 'right'][+(pos[0] < size.viewSize[0] / 2)]] = 30;
+                    return obj;
+                }
+            },
+            axisPointer: {
+                link: [{xAxisIndex: 'all'}],
+                label: {
+                    backgroundColor: '#777'
+                }
+            },
+            toolbox: {
+                feature: {
+                    dataZoom: {
+                        yAxisIndex: false
+                    },
+                    brush: {
+                        type: ['lineX', 'clear']
+                    }
+                }
+            },
+            brush: {
+                xAxisIndex: 'all',
+                brushLink: 'all',
+                outOfBrush: {
+                    colorAlpha: 0.1
+                }
+            },
+            visualMap: {
+                show: false,
+                seriesIndex: 5,
+                dimension: 2,
+                pieces: [{
+                    value: 1,
+                    color: '#f44336'
+                }, {
+                    value: -1,
+                    color: '#4caf50'
+                }]
+            },
+            grid: [
+                {
+                    left: '10%',
+                    right: '8%',
+                    height: '50%'
+                },
+                {
+                    left: '10%',
+                    right: '8%',
+                    top: '63%',
+                    height: '16%'
+                }
+            ],
+            xAxis: [
+                {
+                    type: 'category',
+                    data: chartData.categoryData,
+                    scale: true,
+                    boundaryGap: false,
+                    axisLine: {onZero: false},
+                    splitLine: {show: false},
+                    min: 'dataMin',
+                    max: 'dataMax',
+                    axisPointer: {
+                        z: 100
+                    }
+                },
+                {
+                    type: 'category',
+                    gridIndex: 1,
+                    data: chartData.categoryData,
+                    scale: true,
+                    boundaryGap: false,
+                    axisLine: {onZero: false},
+                    axisTick: {show: false},
+                    splitLine: {show: false},
+                    axisLabel: {show: false},
+                    min: 'dataMin',
+                    max: 'dataMax'
+                }
+            ],
+            yAxis: [
+                {
+                    scale: true,
+                    splitArea: {
+                        show: true
+                    }
+                },
+                {
+                    scale: true,
+                    gridIndex: 1,
+                    splitNumber: 2,
+                    axisLabel: {show: false},
+                    axisLine: {show: false},
+                    axisTick: {show: false},
+                    splitLine: {show: false}
+                }
+            ],
+            dataZoom: [
+                {
+                    type: 'inside',
+                    xAxisIndex: [0, 1],
+                    start: 0,
+                    end: 100
+                },
+                {
+                    show: true,
+                    xAxisIndex: [0, 1],
+                    type: 'slider',
+                    top: '85%',
+                    start: 0,
+                    end: 100
+                }
+            ],
+            series: [
+                {
+                    name: 'K线',
+                    type: 'candlestick',
+                    data: chartData.values,
+                    itemStyle: {
+                        color: '#f44336',
+                        color0: '#4caf50',
+                        borderColor: '#f44336',
+                        borderColor0: '#4caf50'
+                    },
+                    tooltip: {
+                        formatter: function (param) {
+                            param = param[0];
+                            return [
+                                '日期: ' + param.name + '<hr size=1 style="margin: 3px 0">',
+                                '开盘价: ' + param.data[0] + '<br/>',
+                                '收盘价: ' + param.data[1] + '<br/>',
+                                '最低价: ' + param.data[2] + '<br/>',
+                                '最高价: ' + param.data[3] + '<br/>'
+                            ].join('');
+                        }
+                    }
+                },
+                {
+                    name: 'MA5',
+                    type: 'line',
+                    data: chartData.ma5,
+                    smooth: true,
+                    lineStyle: {
+                        opacity: 0.5
+                    }
+                },
+                {
+                    name: 'MA10',
+                    type: 'line',
+                    data: chartData.ma10,
+                    smooth: true,
+                    lineStyle: {
+                        opacity: 0.5
+                    }
+                },
+                {
+                    name: 'MA20',
+                    type: 'line',
+                    data: chartData.ma20,
+                    smooth: true,
+                    lineStyle: {
+                        opacity: 0.5
+                    }
+                },
+                {
+                    name: 'MA30',
+                    type: 'line',
+                    data: chartData.ma30,
+                    smooth: true,
+                    lineStyle: {
+                        opacity: 0.5
+                    }
+                },
+                {
+                    name: '成交量',
+                    type: 'bar',
+                    xAxisIndex: 1,
+                    yAxisIndex: 1,
+                    data: chartData.volumes
+                }
+            ]
+        };
+
+        // 使用配置项显示图表
+        myChart.setOption(option);
+
+        // 响应窗口大小变化
+        window.addEventListener('resize', function() {
+            myChart.resize();
+        });
+    </script>
+</body>
+</html>
