@@ -12,7 +12,8 @@ import os
 from mcp.server.fastmcp import FastMCP
 
 from utils.logging_utils import setup_logging
-from src.tools.kline_tools import register_tools
+from src.tools.kline_tools import register_tools as register_kline_tools
+from src.tools.symbol_tools import register_tools as register_symbol_tools
 
 # 设置日志
 logger = setup_logging('quant_mcp.server')
@@ -31,7 +32,8 @@ def create_server(name: str = "量化交易助手") -> FastMCP:
     mcp = FastMCP(name)
 
     # 注册工具
-    register_tools(mcp)
+    register_kline_tools(mcp)
+    register_symbol_tools(mcp)
 
     return mcp
 
