@@ -38,7 +38,10 @@ async def run_strategy_backtest(
         indicator: 自定义指标代码，可选
         control_risk: 自定义风控代码，可选
         timing: 自定义择时代码，可选
-        choose_stock: 自定义标的代码或股票代码，可选
+        choose_stock: 自定义标的代码，可以是以下几种形式：
+                     1. 完整的choose_stock函数代码，以"def choose_stock(context):"开头
+                     2. 单个股票代码，如"600000.XSHG"
+                     3. 多个股票代码，如"600000.XSHG&000001.XSHE"，用"&"符号分隔多个股票代码
 
     Returns:
         str: 回测结果信息，或错误信息
@@ -47,6 +50,20 @@ async def run_strategy_backtest(
         # 检查策略ID
         if not strategy_id:
             return "错误: 策略ID不能为空"
+
+        # 处理choose_stock参数
+        stock_info = ""
+        if choose_stock:
+            # 判断是否已经是完整的choose_stock函数
+            if choose_stock.strip().startswith("def choose_stock(context):"):
+                # 已经是完整的函数代码，直接使用
+                stock_info = choose_stock.strip()
+                logger.info("使用提供的choose_stock函数代码进行回测")
+            else:
+                # 不是函数代码，将其格式化为choose_stock函数
+                stock_info = choose_stock
+                choose_stock = format_choose_stock(choose_stock)
+                logger.info(f"使用指定股票 {stock_info} 进行回测")
 
         # 运行回测
         result = run_backtest(
@@ -62,7 +79,12 @@ async def run_strategy_backtest(
 
         # 格式化输出
         if result['success']:
-            result_str = f"回测成功完成！\n\n"
+            # 根据是否使用指定股票生成不同的标题
+            if stock_info and not stock_info.startswith("def choose_stock"):
+                result_str = f"使用股票 {stock_info} 回测成功完成！\n\n"
+            else:
+                result_str = f"使用策略自带标的进行，回测成功完成！\n\n"
+
             result_str += f"策略: {result['strategy_name']} (ID: {result['strategy_id']})\n"
             result_str += f"接收到 {result['position_count']} 条position数据\n"
             result_str += f"数据已保存到: {result['file_path']}\n"
@@ -72,66 +94,14 @@ async def run_strategy_backtest(
             else:
                 result_str += "\n未生成回测结果图表"
 
-            return result_str
-        else:
-            return f"回测失败: {result.get('error', '未知错误')}"
-
-    except Exception as e:
-        logger.error(f"运行回测时发生错误: {e}")
-        return f"运行回测时发生错误: {e}"
-
-
-async def backtest_with_stock(
-    strategy_id: str,
-    stock_code: str,
-    listen_time: int = 30,
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None
-) -> str:
-    """
-    使用指定股票进行回测
-
-    Args:
-        strategy_id: 策略ID
-        stock_code: 股票代码，例如 "600000.XSHG" 或多个股票 "600000.XSHG&000001.XSHE"
-        listen_time: 监听时间（秒），默认30秒
-        start_date: 回测开始日期，格式为 "YYYY-MM-DD"，可选，默认为一年前
-        end_date: 回测结束日期，格式为 "YYYY-MM-DD"，可选，默认为今天
-
-    Returns:
-        str: 回测结果信息，或错误信息
-    """
-    try:
-        # 检查策略ID和股票代码
-        if not strategy_id:
-            return "错误: 策略ID不能为空"
-
-        if not stock_code:
-            return "错误: 股票代码不能为空"
-
-        # 格式化股票代码为choose_stock函数
-        choose_stock = format_choose_stock(stock_code)
-
-        # 运行回测
-        result = run_backtest(
-            strategy_id=strategy_id,
-            listen_time=listen_time,
-            start_date=start_date,
-            end_date=end_date,
-            choose_stock=choose_stock
-        )
-
-        # 格式化输出
-        if result['success']:
-            result_str = f"使用股票 {stock_code} 回测成功完成！\n\n"
-            result_str += f"策略: {result['strategy_name']} (ID: {result['strategy_id']})\n"
-            result_str += f"接收到 {result['position_count']} 条position数据\n"
-            result_str += f"数据已保存到: {result['file_path']}\n"
-
-            if result.get('chart_path'):
-                result_str += f"\n回测结果图表已生成并在浏览器中打开: {result['chart_path']}"
-            else:
-                result_str += "\n未生成回测结果图表"
+            # 添加日期验证信息
+            date_validation = result.get('date_validation', {})
+            if date_validation.get('from_date_adjusted') or date_validation.get('to_date_adjusted'):
+                result_str += "\n\n日期范围已自动调整:"
+                if date_validation.get('from_date_adjusted'):
+                    result_str += f"\n- 开始日期从 {date_validation.get('original_from_date')} 调整为 {date_validation.get('adjusted_from_date')} (股票上市日期: {date_validation.get('listing_date')})"
+                if date_validation.get('to_date_adjusted'):
+                    result_str += f"\n- 结束日期从 {date_validation.get('original_to_date')} 调整为 {date_validation.get('adjusted_to_date')} (股票最后交易日期: {date_validation.get('last_date')})"
 
             return result_str
         else:
@@ -151,6 +121,3 @@ def register_tools(mcp: FastMCP):
     """
     # 注册运行策略回测工具
     mcp.tool()(run_strategy_backtest)
-
-    # 注册使用指定股票进行回测工具
-    mcp.tool()(backtest_with_stock)

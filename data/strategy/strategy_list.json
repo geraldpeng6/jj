@@ -2,16 +2,15 @@
   {
     "strategy_id": "RvK9lMrkgjaOxY8m2oJBV3GEb6qmX1eZ",
     "strategy_name": "单均线策略",
+    "indicator": "def indicators(context):\n    \"\"\"指标\"\"\"\n    # 计算15日的均价，赋值给变量context.sma\n    context.sma = SMA(period=15)\n",
+    "control_risk": "def control_risk(context):\n    \"\"\"风控\"\"\"\n    pass\n",
+    "timing": "def timing(context):\n    \"\"\"择时\"\"\"\n    # 判断是否持仓，如果不持仓，则判断是否出现买入信号\n    if not context.position:\n        # 当股票收盘价上升并且交叉穿过15日均价时，出现买入信号\n        if context.data.close[-1] < context.sma[-1] and context.data.close[0] > context.sma[0]:\n            # 买入信号出现时，发送买入指令，系统自动执行买入交易\n            context.order = context.buy(price=context.data.close[0]*1.1)\n\n    # 如果持仓，则判断是否出现卖出信号\n    else:\n        # 当股票收盘价小于15日均价时，出现卖出信号\n        if context.data.close[-1] > context.sma[-1] and context.data.close[0] < context.sma[0]:\n            # 卖出信号出现时，发送卖出指令，系统自动执行卖出交易\n            context.order = context.sell(price=context.data.close[0]*0.9)\n",
+    "choose_stock": "def choose_stock(context):\n    \"\"\"标的\"\"\"\n    context.symbol_list = [\"600000.XSHG\"]\n",
+    "strategy_group": "library",
     "strategy_desc": [
       "股票适用",
       "期货适用"
-    ],
-    "strategy_desc_url": "",
-    "strategy_group": "library",
-    "indicator": null,
-    "control_risk": null,
-    "timing": null,
-    "choose_stock": null
+    ]
   },
   {
     "strategy_id": "bXw27Vmpqx3enDo9b0PW5jNBaY1KLGZl",
@@ -493,5 +492,9 @@
     "timing": "def timing(context):\n    \"\"\"择时\"\"\"\n    if context.data.close > context.sma and context.data.close[-1] < context.sma[-1]:\n        # 收盘价上穿移动平均线时，买入\n        context.buy(price=context.data.close[0]*1.1)\n\n    elif context.data.close < context.sma and context.data.close[-1] > context.sma[-1]:\n        # 收盘价下穿移动平均线时，卖出\n        if context.position.size > 0:\n            context.sell(price=context.data.close[0]*0.9)\n",
     "choose_stock": "def choose_stock(context):\n    context.symbol_list = [\"600000.XSHG\"]\n",
     "strategy_group": "user"
+  },
+  {
+    "strategy_group": "user",
+    "strategy_id": "jJp3Onk2bLBd7QoKWom6e49gyZMxDRNY"
   }
 ]

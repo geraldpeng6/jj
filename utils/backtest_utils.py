@@ -25,6 +25,7 @@ import socks  # 用于SOCKS代理支持
 from utils.auth_utils import load_auth_config, get_auth_info, get_headers
 from utils.kline_utils import fetch_and_save_kline
 from utils.chart_generator import open_in_browser, generate_backtest_html, load_backtest_data
+from utils.symbol_utils import validate_date_range
 
 # 获取日志记录器
 logger = logging.getLogger('quant_mcp.backtest_utils')
@@ -1115,7 +1116,18 @@ def run_backtest(
         'position_count': 0,
         'file_path': None,
         'chart_path': None,
-        'error': None
+        'error': None,
+        'date_validation': {
+            'from_date_adjusted': False,
+            'to_date_adjusted': False,
+            'original_from_date': start_date,
+            'original_to_date': end_date,
+            'adjusted_from_date': start_date,
+            'adjusted_to_date': end_date,
+            'listing_date': None,
+            'last_date': None,
+            'messages': []
+        }
     }
 
     # 获取认证信息
@@ -1178,6 +1190,52 @@ def run_backtest(
         if modified:
             logger.info("策略已修改，使用修改后的策略运行回测")
 
+        # 提取股票代码
+        try:
+            symbols = extract_symbols_from_strategy(strategy_data)
+        except ValueError as e:
+            error_msg = f"无法从策略中提取股票代码: {str(e)}"
+            logger.error(error_msg)
+            result['error'] = error_msg
+            return result
+
+        # 验证日期范围
+        if symbols and len(symbols) > 0:
+            # 获取第一个股票的完整代码
+            symbol = symbols[0].get('symbol')
+            exchange = symbols[0].get('exchange')
+            if symbol and exchange:
+                full_name = f"{symbol}.{exchange}"
+
+                # 验证并调整日期范围
+                logger.info(f"验证股票 {full_name} 的回测日期范围")
+                validated_start_date, validated_end_date, validation_info = validate_date_range(
+                    full_name=full_name,
+                    from_date=start_date,
+                    to_date=end_date
+                )
+
+                # 更新结果中的日期验证信息
+                result['date_validation']['from_date_adjusted'] = validation_info.get('from_date_adjusted', False)
+                result['date_validation']['to_date_adjusted'] = validation_info.get('to_date_adjusted', False)
+                result['date_validation']['original_from_date'] = validation_info.get('original_from_date', start_date)
+                result['date_validation']['original_to_date'] = validation_info.get('original_to_date', end_date)
+                result['date_validation']['adjusted_from_date'] = validated_start_date
+                result['date_validation']['adjusted_to_date'] = validated_end_date
+                result['date_validation']['listing_date'] = validation_info.get('listing_date')
+                result['date_validation']['last_date'] = validation_info.get('last_date')
+                result['date_validation']['messages'] = validation_info.get('message', [])
+
+                # 使用验证后的日期
+                start_date = validated_start_date
+                end_date = validated_end_date
+
+                # 记录日期调整信息
+                if validation_info.get('from_date_adjusted') or validation_info.get('to_date_adjusted'):
+                    logger.info(f"回测日期范围已调整: {start_date} 到 {end_date}")
+                    for msg in validation_info.get('message', []):
+                        logger.info(msg)
+
         # 获取MQTT连接信息
         mqtt_info = get_mqtt_info()
         if not mqtt_info:
@@ -1196,7 +1254,7 @@ def run_backtest(
             result['error'] = error_msg
             return result
 
-        # 发送回测请求
+        # 发送回测请求，使用可能已经过验证调整的日期
         backtest_token = send_backtest_request(
             strategy_id=strategy_id,
             mqtt_info=mqtt_info,
@@ -1236,16 +1294,7 @@ def run_backtest(
             result['position_count'] = len(mqtt_client.position_data)
             result['success'] = True
 
-            # 提取股票代码
-            try:
-                symbols = extract_symbols_from_strategy(strategy_data)
-            except ValueError as e:
-                error_msg = f"无法从策略中提取股票代码: {str(e)}"
-                logger.error(error_msg)
-                result['error'] = error_msg
-                return result
-
-            # 提取回测参数，优先使用传入的自定义时间范围
+            # 提取回测参数，优先使用传入的自定义时间范围（可能已经过验证调整）
             backtest_params = extract_backtest_params(strategy_data, start_date, end_date)
 
             # 提取买入卖出点

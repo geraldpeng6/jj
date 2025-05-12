@@ -8,7 +8,7 @@
 from utils.kline_utils import fetch_and_save_kline
 
 # 导入股票符号相关工具函数
-from utils.symbol_utils import get_symbol_info
+from utils.symbol_utils import get_symbol_info, search_symbols
 
 # 导入策略相关工具函数
 from utils.strategy_utils import (
