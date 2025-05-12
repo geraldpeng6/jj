@@ -9,8 +9,12 @@
 
 import logging
 from typing import Dict, Any, List, Optional
+from pydantic import Field
 from mcp.server.fastmcp import FastMCP
-from mcp.types import Prompt, PromptArgument, PromptMessage, TextContent, GetPromptResult
+from mcp.types import PromptMessage, TextContent, EmbeddedResource
+
+# 导入采样工具
+from src.utils.sampling_utils import request_sampling, SYSTEM_PROMPTS, MODEL_PREFERENCES
 
 # 获取日志记录器
 logger = logging.getLogger('quant_mcp.strategy_prompts')
@@ -22,9 +26,18 @@ def register_prompts(mcp: FastMCP):
     Args:
         mcp: MCP服务器实例
     """
-    # 定义创建策略提示处理函数
-    async def get_create_strategy_prompt(strategy_type: str, timeframe: str, risk_level: str) -> GetPromptResult:
-        """获取创建策略提示模板"""
+
+    # 注册创建策略提示处理函数
+    @mcp.prompt(
+        name="create_strategy",
+        description="创建新的交易策略"
+    )
+    async def create_strategy(
+        strategy_type: str = Field(description="策略类型 [建议: trend_following, mean_reversion, breakout, momentum, value]"),
+        timeframe: str = Field(description="交易时间框架 [默认值: swing] [建议: day, swing, position]"),
+        risk_level: str = Field(description="风险水平 [默认值: medium] [建议: low, medium, high]")
+    ) -> List[PromptMessage]:
+        """创建新的交易策略"""
         # 构建提示消息
         messages = [
             PromptMessage(
@@ -46,18 +59,26 @@ def register_prompts(mcp: FastMCP):
             )
         ]
 
-        return GetPromptResult(messages=messages)
+        return messages
 
-    # 定义优化策略提示处理函数
-    async def get_optimize_strategy_prompt(strategy_description: str, optimization_goal: str) -> GetPromptResult:
-        """获取优化策略提示模板"""
+    # 注册优化策略提示处理函数
+    @mcp.prompt(
+        name="optimize_strategy",
+        description="优化现有交易策略"
+    )
+    async def optimize_strategy(
+        strategy_description: str = Field(description="现有策略的描述"),
+        optimization_goal: str = Field(description="优化目标 [建议: returns, drawdown, sharpe, stability, execution]"),
+        market_condition: str = Field(default="normal", description="市场环境 [默认值: normal] [建议: bull, bear, volatile, normal]")
+    ) -> List[PromptMessage]:
+        """优化现有交易策略"""
         # 构建提示消息
         messages = [
             PromptMessage(
                 role="user",
                 content=TextContent(
                     type="text",
-                    text=f"请帮我优化以下交易策略，优化目标是{optimization_goal}：\n\n"
+                    text=f"请帮我优化以下交易策略，优化目标是{optimization_goal}，考虑{market_condition}市场环境：\n\n"
                     f"{strategy_description}\n\n"
                     f"优化建议应包括：\n"
                     f"1. 现有策略的问题分析\n"
@@ -72,54 +93,6 @@ def register_prompts(mcp: FastMCP):
             )
         ]
 
-        return GetPromptResult(messages=messages)
+        return messages
 
-    # 注册带有元数据的提示模板
-    try:
-        # 为创建策略提示添加元数据
-        create_strategy_metadata = Prompt(
-            name="create_strategy",
-            description="创建一个新的交易策略",
-            arguments=[
-                PromptArgument(
-                    name="strategy_type",
-                    description="策略类型 [默认值: 趋势跟踪] [建议: 趋势跟踪, 均值回归, 突破交易, 波动率交易, 价格行为, 技术指标组合]",
-                    required=True
-                ),
-                PromptArgument(
-                    name="timeframe",
-                    description="交易时间周期 [默认值: 日线] [建议: 日线, 4小时, 1小时, 30分钟, 15分钟, 5分钟]",
-                    required=True
-                ),
-                PromptArgument(
-                    name="risk_level",
-                    description="风险水平 [默认值: 中等] [建议: 保守, 中等, 激进]",
-                    required=True
-                )
-            ]
-        )
 
-        # 为优化策略提示添加元数据
-        optimize_strategy_metadata = Prompt(
-            name="optimize_strategy",
-            description="优化现有交易策略",
-            arguments=[
-                PromptArgument(
-                    name="strategy_description",
-                    description="现有策略描述 [建议: 请粘贴您的策略代码或详细描述]",
-                    required=True
-                ),
-                PromptArgument(
-                    name="optimization_goal",
-                    description="优化目标 [默认值: 提高收益率] [建议: 提高收益率, 降低回撤, 减少交易频率, 提高胜率, 改善风险收益比]",
-                    required=True
-                )
-            ]
-        )
-
-        # 注册带有元数据的提示模板
-        mcp.register_prompt_with_metadata("create_strategy", get_create_strategy_prompt, create_strategy_metadata)
-        mcp.register_prompt_with_metadata("optimize_strategy", get_optimize_strategy_prompt, optimize_strategy_metadata)
-        logger.info("成功注册策略提示模板")
-    except Exception as e:
-        logger.error(f"注册策略提示模板时发生错误: {e}")

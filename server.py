@@ -9,37 +9,16 @@ MCP服务器入口
 import sys
 import logging
 import os
-import argparse
 from mcp.server.fastmcp import FastMCP
 
 from utils.logging_utils import setup_logging
-from src.utils.prompt_utils import patch_fastmcp
 from src.tools import register_all_tools
 from src.resources import register_all_resources
 from src.prompts import register_all_prompts
 from src.sampling import register_all_sampling
 
-# 解析命令行参数
-parser = argparse.ArgumentParser(description='启动量化交易助手MCP服务器')
-parser.add_argument('--transport', type=str, choices=['stdio', 'http', 'sse', 'streamable-http'], default='stdio',
-                    help='传输协议 (默认: stdio)')
-parser.add_argument('--log-level', type=str, choices=['debug', 'info', 'warning', 'error', 'critical'],
-                    default='info', help='日志级别 (默认: info)')
-
-args = parser.parse_args()
-
-# 设置日志级别
-log_level_map = {
-    'debug': logging.DEBUG,
-    'info': logging.INFO,
-    'warning': logging.WARNING,
-    'error': logging.ERROR,
-    'critical': logging.CRITICAL
-}
-log_level = log_level_map.get(args.log_level.lower(), logging.INFO)
-
 # 设置日志
-logger = setup_logging('quant_mcp.server', log_level=log_level)
+logger = setup_logging('quant_mcp.server')
 
 def create_server(name: str = "量化交易助手") -> FastMCP:
     """
@@ -51,9 +30,6 @@ def create_server(name: str = "量化交易助手") -> FastMCP:
     Returns:
         FastMCP: MCP服务器实例
     """
-    # 为FastMCP类添加update_prompt_metadata方法
-    patch_fastmcp()
-
     # 创建FastMCP服务器实例
     mcp = FastMCP(name)
 
@@ -91,20 +67,19 @@ def run_server(transport: str = 'stdio'):
         mcp = create_server()
 
         # 启动服务器
-        if transport == 'http':
-            # FastMCP不直接支持HTTP传输，使用streamable-http代替
-            logger.info(f"启动MCP服务器，使用streamable-http传输协议")
-            print(f"启动量化交易助手MCP服务器，使用streamable-http传输协议")
-            mcp.run(transport='streamable-http')
-        else:
-            logger.info(f"启动MCP服务器，使用 {transport} 传输协议")
-            print(f"启动量化交易助手MCP服务器，使用 {transport} 传输协议")
-            mcp.run(transport=transport)
+        logger.info(f"启动MCP服务器，使用 {transport} 传输协议")
+        print(f"启动量化交易助手MCP服务器，使用 {transport} 传输协议")
+        mcp.run(transport=transport)
     except Exception as e:
         logger.error(f"启动MCP服务器失败: {e}")
         print(f"错误: 启动MCP服务器失败: {e}", file=sys.stderr)
         sys.exit(1)
 
 if __name__ == "__main__":
+    # 从命令行参数获取传输协议
+    transport = 'stdio'
+    if len(sys.argv) > 1:
+        transport = sys.argv[1]
+
     # 运行服务器
-    run_server(transport=args.transport)
+    run_server(transport)
