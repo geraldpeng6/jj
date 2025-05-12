@@ -22,11 +22,7 @@ def register_prompts(mcp: FastMCP):
     Args:
         mcp: MCP服务器实例
     """
-    # 不再使用add_prompt方法，而是直接使用prompt装饰器
-    # 这样可以避免'Prompt'对象没有'render'属性的错误
-
-    # 注册K线分析提示处理函数
-    @mcp.prompt("analyze_kline")
+    # 定义K线分析提示处理函数
     async def get_analyze_kline_prompt(symbol: str, exchange: str, resolution: str, analysis_type: str = "all") -> GetPromptResult:
         """获取K线分析提示模板"""
         # 构建提示消息
@@ -51,8 +47,7 @@ def register_prompts(mcp: FastMCP):
 
         return GetPromptResult(messages=messages)
 
-    # 注册股票比较提示处理函数
-    @mcp.prompt("compare_stocks")
+    # 定义股票比较提示处理函数
     async def get_compare_stocks_prompt(symbols: str, exchange: str, resolution: str, comparison_period: str = "3m") -> GetPromptResult:
         """获取股票比较提示模板"""
         # 解析股票代码列表
@@ -82,4 +77,68 @@ def register_prompts(mcp: FastMCP):
 
         return GetPromptResult(messages=messages)
 
+    # 注册带有元数据的提示模板
+    try:
+        # 为K线分析提示添加元数据
+        analyze_kline_metadata = Prompt(
+            name="analyze_kline",
+            description="分析股票K线数据",
+            arguments=[
+                PromptArgument(
+                    name="symbol",
+                    description="股票代码 [默认值: AAPL] [建议: AAPL, MSFT, GOOG, AMZN, BABA, 600519, 000001]",
+                    required=True
+                ),
+                PromptArgument(
+                    name="exchange",
+                    description="交易所 [默认值: US] [建议: US, HK, SH, SZ, binance, okex]",
+                    required=True
+                ),
+                PromptArgument(
+                    name="resolution",
+                    description="K线周期 [默认值: D] [建议: D, 240, 60, 30, 15, 5, 1]",
+                    required=True
+                ),
+                PromptArgument(
+                    name="analysis_type",
+                    description="分析类型 [默认值: all] [建议: all, 趋势分析, 形态分析, 指标分析, 支撑阻力, 成交量分析]",
+                    required=False
+                )
+            ]
+        )
+
+        # 为股票比较提示添加元数据
+        compare_stocks_metadata = Prompt(
+            name="compare_stocks",
+            description="比较多只股票的表现",
+            arguments=[
+                PromptArgument(
+                    name="symbols",
+                    description="股票代码列表（用逗号分隔） [默认值: AAPL,MSFT,GOOG] [建议: AAPL,MSFT,GOOG, BABA,JD,PDD, 600519,000858,002304]",
+                    required=True
+                ),
+                PromptArgument(
+                    name="exchange",
+                    description="交易所 [默认值: US] [建议: US, HK, SH, SZ]",
+                    required=True
+                ),
+                PromptArgument(
+                    name="resolution",
+                    description="K线周期 [默认值: D] [建议: D, W, M]",
+                    required=True
+                ),
+                PromptArgument(
+                    name="comparison_period",
+                    description="比较周期 [默认值: 3m] [建议: 1m, 3m, 6m, 1y, 3y, 5y, ytd]",
+                    required=False
+                )
+            ]
+        )
+
+        # 注册带有元数据的提示模板
+        mcp.register_prompt_with_metadata("analyze_kline", get_analyze_kline_prompt, analyze_kline_metadata)
+        mcp.register_prompt_with_metadata("compare_stocks", get_compare_stocks_prompt, compare_stocks_metadata)
+        logger.info("成功注册K线数据提示模板")
+    except Exception as e:
+        logger.error(f"注册K线数据提示模板时发生错误: {e}")
 

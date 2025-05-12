@@ -26,3 +26,5 @@ from utils.backtest_utils import (
     extract_buy_sell_points,
     calculate_performance_metrics
 )
+
+# 提示模板相关工具函数已移至src/utils/prompt_utils.py

@@ -13,6 +13,7 @@ import argparse
 from mcp.server.fastmcp import FastMCP
 
 from utils.logging_utils import setup_logging
+from src.utils.prompt_utils import patch_fastmcp
 from src.tools import register_all_tools
 from src.resources import register_all_resources
 from src.prompts import register_all_prompts
@@ -50,6 +51,9 @@ def create_server(name: str = "量化交易助手") -> FastMCP:
     Returns:
         FastMCP: MCP服务器实例
     """
+    # 为FastMCP类添加update_prompt_metadata方法
+    patch_fastmcp()
+
     # 创建FastMCP服务器实例
     mcp = FastMCP(name)
 
