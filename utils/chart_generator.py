@@ -430,33 +430,39 @@ def extract_cash_series(backtest_data: List[Dict[str, Any]]) -> Tuple[List[int],
     Returns:
         Tuple[List[int], List[float]]: 时间戳列表和对应的现金价值列表
     """
-    timestamps = []
-    cash_values = []
+    # 首先提取所有时间戳，确保与总资产价值序列一致
+    timestamps, _ = extract_value_series(backtest_data)
+    cash_values = [0.0] * len(timestamps)  # 初始化现金值列表，默认为0
 
     try:
+        # 创建时间戳到索引的映射
+        timestamp_to_index = {ts: i for i, ts in enumerate(timestamps)}
+
         for item in backtest_data:
             if not isinstance(item, dict):
                 continue
 
             # 获取时间戳
             timestamp = item.get('tm')
-            if not timestamp:
+            if not timestamp or timestamp not in timestamp_to_index:
                 continue
+
+            # 获取该时间戳在列表中的索引
+            index = timestamp_to_index[timestamp]
 
             # 获取持仓信息，找到现金持仓（category=0）
             positions = item.get('positions', [])
             for pos in positions:
                 if pos.get('category') == 0:
                     cash_value = pos.get('value', 0)
-                    timestamps.append(timestamp)
-                    cash_values.append(float(cash_value))
+                    cash_values[index] = float(cash_value)
                     break
 
-        logger.info(f"成功提取现金序列，共 {len(timestamps)} 个数据点")
+        logger.info(f"成功提取现金序列，共 {len(cash_values)} 个数据点")
         return timestamps, cash_values
     except Exception as e:
         logger.error(f"提取现金序列时发生错误: {e}")
-        return [], []
+        return timestamps, [0.0] * len(timestamps)  # 返回与时间戳长度一致的现金值列表
 
 
 def extract_buy_sell_points(backtest_data: List[Dict[str, Any]]) -> Dict[str, Dict[str, List]]:
@@ -700,15 +706,10 @@ def prepare_backtest_chart_data(
         # 计算持仓价值序列（总资产 - 现金）
         position_values = []
 
-        # 确保时间戳列表一致
-        if len(timestamps) == len(cash_values):
-            for i in range(len(timestamps)):
-                position_value = values[i] - cash_values[i]
-                position_values.append(position_value)
-        else:
-            logger.warning("总资产序列和现金序列长度不一致，无法计算持仓价值序列")
-            # 使用总资产作为占位符
-            position_values = values.copy()
+        # 由于我们修改了extract_cash_series函数，现在时间戳列表一定一致
+        for i in range(len(timestamps)):
+            position_value = max(0.0, values[i] - cash_values[i])  # 确保持仓价值不为负
+            position_values.append(position_value)
 
         # 转换时间戳为日期字符串
         dates = []
@@ -884,6 +885,20 @@ def generate_backtest_html(
             file_name = f"backtest_{strategy_id}_{symbol}_{exchange}_{timestamp}.html"
         else:
             file_name = f"backtest_{strategy_id}_{timestamp}.html"
+
+        # 如果没有提供symbol和exchange，尝试从回测数据中提取
+        if not symbol or not exchange:
+            for item in backtest_data:
+                if isinstance(item, dict) and item.get('positions'):
+                    for pos in item.get('positions', []):
+                        if pos.get('category') == 1 and pos.get('symbol') and pos.get('exchange'):
+                            symbol = pos.get('symbol')
+                            exchange = pos.get('exchange')
+                            # 更新文件名
+                            file_name = f"backtest_{strategy_id}_{symbol}_{exchange}_{timestamp}.html"
+                            break
+                    if symbol and exchange:
+                        break
 
         file_path = os.path.join(output_dir, file_name)
 

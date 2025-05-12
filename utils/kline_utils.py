@@ -126,7 +126,11 @@ def fetch_and_save_kline(
         logger.debug(f"请求头: {headers}")
 
         # 发送API请求
-        response = requests.get(url, params=params, headers=headers)
+        # 如果响应使用压缩，可能会导致JSON解析错误，所以我们使用不压缩的请求
+        headers_no_compression = headers.copy()
+        headers_no_compression['Accept-Encoding'] = 'identity'
+
+        response = requests.get(url, params=params, headers=headers_no_compression)
         response.raise_for_status()
         data = response.json()
 
