@@ -55,7 +55,6 @@ def run_server(transport: str = 'stdio'):
         os.makedirs('data/charts', exist_ok=True)
         os.makedirs('data/temp', exist_ok=True)
         os.makedirs('data/config', exist_ok=True)
-        os.makedirs('data/strategy', exist_ok=True)
         os.makedirs('data/backtest', exist_ok=True)
         os.makedirs('data/templates', exist_ok=True)
 
