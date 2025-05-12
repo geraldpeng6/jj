@@ -65,6 +65,28 @@ async def run_strategy_backtest(
                 choose_stock = format_choose_stock(choose_stock)
                 logger.info(f"使用指定股票 {stock_info} 进行回测")
 
+        # 准备策略代码数据
+        strategy_code = {}
+        if indicator:
+            strategy_code['indicator'] = indicator
+        if control_risk:
+            strategy_code['control_risk'] = control_risk
+        if timing:
+            strategy_code['timing'] = timing
+        if choose_stock:
+            strategy_code['choose_stock'] = choose_stock
+
+        # 记录策略代码信息，用于调试
+        logger.info(f"准备自定义策略代码数据:")
+        for key, value in strategy_code.items():
+            if value:
+                logger.info(f"自定义策略代码 {key} 长度: {len(value)} 字符")
+                # 记录代码的前50个字符，用于调试
+                logger.info(f"自定义策略代码 {key} 前50个字符: {value[:50]}")
+
+        # 记录传递的参数，用于调试
+        logger.info(f"运行回测参数: strategy_id={strategy_id}, 自定义代码: indicator={bool(indicator)}, control_risk={bool(control_risk)}, timing={bool(timing)}, choose_stock={bool(choose_stock)}")
+
         # 运行回测
         result = run_backtest(
             strategy_id=strategy_id,

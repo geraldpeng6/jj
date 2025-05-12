@@ -72,6 +72,7 @@ coverage.xml
 # Project specific
 data/logs/
 data/temp/
+data/test/
 data/charts/
 data/klines/
 data/backtest/

@@ -254,12 +254,17 @@
                 }
             },
             legend: {
-                data: ['总资产', '现金', '持仓']
+                data: ['总资产', '现金', '持仓'],
+                selected: {
+                    '总资产': true,
+                    '现金': false,  // 默认隐藏现金曲线
+                    '持仓': false   // 默认隐藏持仓曲线
+                }
             },
             grid: {
                 left: '3%',
                 right: '4%',
-                bottom: '3%',
+                bottom: '15%',  // 增加底部空间以容纳缩放控件
                 containLabel: true
             },
             xAxis: {
@@ -273,41 +278,21 @@
                     formatter: '{value} 元'
                 }
             },
-            visualMap: {
-                show: false,
-                seriesIndex: 0,
-                dimension: 2,  // 使用额外维度
-                pieces: [
-                    {
-                        gt: 0,  // profit_and_loss增加
-                        color: '#E53935'  // 红色
-                    },
-                    {
-                        lte: 0,  // profit_and_loss不变或减少
-                        color: '#1976D2'  // 蓝色
-                    }
-                ]
-            },
-            series: [
+            dataZoom: [  // 添加缩放功能，类似K线图
                 {
-                    name: '总资产',
-                    type: 'line',
-                    // 创建包含profit_change的数据点
-                    data: chartData.values.map((value, index) => {
-                        // 为每个点添加profit_change作为额外维度
-                        const profitChange = chartData.profit_changes && index < chartData.profit_changes.length
-                            ? chartData.profit_changes[index]
-                            : 0;
-                        return [chartData.dates[index], value, profitChange];
-                    }),
-                    smooth: true,
-                    lineStyle: {
-                        width: 3
-                    },
-                    itemStyle: {
-                        color: '#1976D2'  // 默认颜色，会被visualMap覆盖
-                    }
+                    type: 'inside',
+                    start: 0,
+                    end: 100
                 },
+                {
+                    show: true,
+                    type: 'slider',
+                    bottom: '3%',
+                    start: 0,
+                    end: 100
+                }
+            ],
+            series: [
                 {
                     name: '现金',
                     type: 'line',
@@ -334,6 +319,35 @@
                 }
             ]
         };
+
+        // 使用单一颜色的总资产线
+        const values = chartData.values;
+        if (values && values.length > 0) {
+            // 准备数据点
+            const assetData = [];
+            for (let i = 0; i < values.length; i++) {
+                assetData.push([i, values[i]]);
+            }
+
+            // 添加总资产系列
+            valueOption.series.push({
+                name: '总资产',
+                type: 'line',
+                data: assetData,
+                smooth: true,
+                lineStyle: {
+                    width: 3,
+                    color: '#1976D2'  // 蓝色
+                },
+                itemStyle: {
+                    color: '#1976D2'
+                },
+                showSymbol: false,
+                emphasis: {
+                    focus: 'series'
+                }
+            });
+        }
 
         // 在资产价值走势图上添加买卖点标记
         for (const symbol in chartData.buy_points) {
@@ -375,15 +389,22 @@
                 }
 
                 // 如果找到日期索引，添加买入点
+                // 由于交易在第二天完成，我们需要将买入点向前调整一天
                 if (dateIndex !== -1) {
                     // 获取该日期的总资产值
                     const value = chartData.values[dateIndex];
+
+                    // 获取买入金额（如果有）
+                    const amount = buyPoints.amounts && i < buyPoints.amounts.length ? buyPoints.amounts[i] : 0;
+
+                    // 计算前一天的索引（如果是第一天，则保持不变）
+                    const adjustedDateIndex = Math.max(0, dateIndex - 1);
 
                     // 添加买入点标记
                     valueOption.series.push({
                         name: '买入标记',
                         type: 'scatter',
-                        data: [[dateIndex, value]],
+                        data: [[adjustedDateIndex, chartData.values[adjustedDateIndex]]],
                         itemStyle: {
                             color: '#FF0000'  // 鲜艳的红色
                         },
@@ -393,7 +414,7 @@
                         label: {
                             show: true,
                             position: 'top',
-                            formatter: '买入',
+                            formatter: amount > 0 ? `买入 ${Math.round(amount)}元` : '买入',
                             fontSize: 12,
                             color: '#FF0000',
                             backgroundColor: 'rgba(255,255,255,0.7)',
@@ -447,15 +468,22 @@
                 }
 
                 // 如果找到日期索引，添加卖出点
+                // 由于交易在第二天完成，我们需要将卖出点向前调整一天
                 if (dateIndex !== -1) {
                     // 获取该日期的总资产值
                     const value = chartData.values[dateIndex];
+
+                    // 获取卖出金额（如果有）
+                    const amount = sellPoints.amounts && i < sellPoints.amounts.length ? sellPoints.amounts[i] : 0;
+
+                    // 计算前一天的索引（如果是第一天，则保持不变）
+                    const adjustedDateIndex = Math.max(0, dateIndex - 1);
 
                     // 添加卖出点标记
                     valueOption.series.push({
                         name: '卖出标记',
                         type: 'scatter',
-                        data: [[dateIndex, value]],
+                        data: [[adjustedDateIndex, chartData.values[adjustedDateIndex]]],
                         itemStyle: {
                             color: '#00CC00'  // 鲜艳的绿色
                         },
@@ -464,7 +492,7 @@
                         label: {
                             show: true,
                             position: 'bottom',
-                            formatter: '卖出',
+                            formatter: amount > 0 ? `卖出 ${Math.round(amount)}元` : '卖出',
                             fontSize: 12,
                             color: '#00CC00',
                             backgroundColor: 'rgba(255,255,255,0.7)',
@@ -739,15 +767,19 @@
                     }
 
                     // 如果找到日期索引，添加买入点
+                    // 由于交易在第二天完成，我们需要将买入点向前调整一天
                     if (dateIndex !== -1) {
-                        // 获取该日期的K线价格范围
-                        const klineData = chartData.kline_data.values[dateIndex];
+                        // 计算前一天的索引（如果是第一天，则保持不变）
+                        const adjustedDateIndex = Math.max(0, dateIndex - 1);
+
+                        // 获取调整后日期的K线价格范围
+                        const klineData = chartData.kline_data.values[adjustedDateIndex];
                         // 如果价格为0或无效，使用K线的收盘价
                         const validPrice = (price && price > 0) ? price : klineData[1]; // 收盘价
 
-                        buyData.push([dateIndex, validPrice]);
+                        buyData.push([adjustedDateIndex, validPrice]);
                         buyDetails.push(detail);
-                        console.log(`添加买入点: 日期=${date}, 索引=${dateIndex}, 价格=${validPrice}`);
+                        console.log(`添加买入点: 日期=${date}, 调整后索引=${adjustedDateIndex}, 价格=${validPrice}`);
                     } else {
                         console.log(`未找到买入点日期 ${date} 对应的K线日期`);
                     }
@@ -767,7 +799,11 @@
                         label: {
                             show: true,
                             position: 'top',
-                            formatter: '买入',
+                            formatter: function(param) {
+                                const index = param.dataIndex;
+                                const amount = index < buyPoints.amounts.length ? buyPoints.amounts[index] : 0;
+                                return amount > 0 ? `买入 ${Math.round(amount)}元` : '买入';
+                            },
                             fontSize: 12,
                             color: '#FF0000',
                             backgroundColor: 'rgba(255,255,255,0.7)',
@@ -826,15 +862,19 @@
                     }
 
                     // 如果找到日期索引，添加卖出点
+                    // 由于交易在第二天完成，我们需要将卖出点向前调整一天
                     if (dateIndex !== -1) {
-                        // 获取该日期的K线价格范围
-                        const klineData = chartData.kline_data.values[dateIndex];
+                        // 计算前一天的索引（如果是第一天，则保持不变）
+                        const adjustedDateIndex = Math.max(0, dateIndex - 1);
+
+                        // 获取调整后日期的K线价格范围
+                        const klineData = chartData.kline_data.values[adjustedDateIndex];
                         // 如果价格为0或无效，使用K线的收盘价
                         const validPrice = (price && price > 0) ? price : klineData[1]; // 收盘价
 
-                        sellData.push([dateIndex, validPrice]);
+                        sellData.push([adjustedDateIndex, validPrice]);
                         sellDetails.push(detail);
-                        console.log(`添加卖出点: 日期=${date}, 索引=${dateIndex}, 价格=${validPrice}`);
+                        console.log(`添加卖出点: 日期=${date}, 调整后索引=${adjustedDateIndex}, 价格=${validPrice}`);
                     } else {
                         console.log(`未找到卖出点日期 ${date} 对应的K线日期`);
                     }
@@ -853,7 +893,11 @@
                         label: {
                             show: true,
                             position: 'bottom',
-                            formatter: '卖出',
+                            formatter: function(param) {
+                                const index = param.dataIndex;
+                                const amount = index < sellPoints.amounts.length ? sellPoints.amounts[index] : 0;
+                                return amount > 0 ? `卖出 ${Math.round(amount)}元` : '卖出';
+                            },
                             fontSize: 12,
                             color: '#00CC00',
                             backgroundColor: 'rgba(255,255,255,0.7)',

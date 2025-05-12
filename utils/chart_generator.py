@@ -853,8 +853,7 @@ def prepare_backtest_chart_data(
         'position_values': [],
         'buy_points': {},
         'sell_points': {},
-        'kline_data': None,
-        'profit_changes': []  # 添加profit_and_loss变化数组
+        'kline_data': None
     }
 
     try:
@@ -881,50 +880,6 @@ def prepare_backtest_chart_data(
         for ts in timestamps:
             date_str = dt.fromtimestamp(ts / 1000).strftime('%Y-%m-%d')
             dates.append(date_str)
-
-        # 提取profit_and_loss变化
-        profit_changes = []
-        prev_profit = None
-
-        # 创建时间戳到索引的映射
-        timestamp_to_index = {ts: i for i, ts in enumerate(timestamps)}
-
-        # 遍历每个时间点的数据
-        for item in backtest_data:
-            if not isinstance(item, dict):
-                continue
-
-            # 获取时间戳
-            timestamp = item.get('tm')
-            if not timestamp or timestamp not in timestamp_to_index:
-                continue
-
-            # 获取该时间戳在列表中的索引
-            index = timestamp_to_index[timestamp]
-
-            # 获取现金持仓的profit_and_loss
-            current_profit = None
-            positions = item.get('positions', [])
-            for pos in positions:
-                if pos.get('category') == 0:  # 现金持仓
-                    current_profit = pos.get('profit_and_loss')
-                    break
-
-            # 如果是第一个点，或者无法获取profit_and_loss，使用0表示无变化
-            if prev_profit is None or current_profit is None:
-                profit_changes.append(0)  # 0表示无变化
-            else:
-                # 计算profit_and_loss变化
-                change = current_profit - prev_profit
-                profit_changes.append(change)
-
-            # 更新前一个profit_and_loss值
-            prev_profit = current_profit
-
-        # 确保profit_changes数组长度与时间戳一致
-        if len(profit_changes) < len(timestamps):
-            # 如果数组不足，用0填充
-            profit_changes.extend([0] * (len(timestamps) - len(profit_changes)))
 
         # 提取买卖点
         trade_points = extract_buy_sell_points(backtest_data)
@@ -1015,7 +970,6 @@ def prepare_backtest_chart_data(
         chart_data['buy_points'] = buy_points
         chart_data['sell_points'] = sell_points
         chart_data['kline_data'] = kline_data
-        chart_data['profit_changes'] = profit_changes  # 添加profit_and_loss变化数据
 
         logger.info("成功准备回测图表数据")
         return chart_data
@@ -1062,9 +1016,23 @@ def analyze_backtest_result(
 
         # 尝试从回测数据中提取策略名称
         for item in backtest_data:
-            if isinstance(item, dict) and item.get('strategy_name'):
-                strategy_name = item.get('strategy_name')
-                break
+            if isinstance(item, dict):
+                # 首先尝试获取name字段
+                if item.get('name'):
+                    strategy_name = item.get('name')
+                    break
+                # 然后尝试获取strategy_name字段
+                elif item.get('strategy_name'):
+                    strategy_name = item.get('strategy_name')
+                    break
+                # 最后尝试获取title字段
+                elif item.get('title'):
+                    strategy_name = item.get('title')
+                    break
+                # 尝试从message中获取title
+                elif isinstance(item.get('message'), dict) and item.get('message', {}).get('title'):
+                    strategy_name = item.get('message', {}).get('title')
+                    break
 
         # 尝试从回测数据中提取股票代码
         for item in backtest_data:
