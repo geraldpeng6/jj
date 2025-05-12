@@ -173,20 +173,7 @@
                     <span class="metric-unit">%</span>
                 </div>
             </div>
-            <div class="metric-card">
-                <div class="metric-label">基准收益</div>
-                <div class="metric-value {% if metrics.benchmark_return > 0 %}positive{% elif metrics.benchmark_return < 0 %}negative{% else %}neutral{% endif %}">
-                    {{ metrics.benchmark_return }}
-                    <span class="metric-unit">%</span>
-                </div>
-            </div>
-            <div class="metric-card">
-                <div class="metric-label">基准年化</div>
-                <div class="metric-value {% if metrics.benchmark_annual > 0 %}positive{% elif metrics.benchmark_annual < 0 %}negative{% else %}neutral{% endif %}">
-                    {{ metrics.benchmark_annual }}
-                    <span class="metric-unit">%</span>
-                </div>
-            </div>
+
             <div class="metric-card">
                 <div class="metric-label">所有已平仓交易</div>
                 <div class="metric-value neutral">
@@ -286,17 +273,39 @@
                     formatter: '{value} 元'
                 }
             },
+            visualMap: {
+                show: false,
+                seriesIndex: 0,
+                dimension: 2,  // 使用额外维度
+                pieces: [
+                    {
+                        gt: 0,  // profit_and_loss增加
+                        color: '#E53935'  // 红色
+                    },
+                    {
+                        lte: 0,  // profit_and_loss不变或减少
+                        color: '#1976D2'  // 蓝色
+                    }
+                ]
+            },
             series: [
                 {
                     name: '总资产',
                     type: 'line',
-                    data: chartData.values,
+                    // 创建包含profit_change的数据点
+                    data: chartData.values.map((value, index) => {
+                        // 为每个点添加profit_change作为额外维度
+                        const profitChange = chartData.profit_changes && index < chartData.profit_changes.length
+                            ? chartData.profit_changes[index]
+                            : 0;
+                        return [chartData.dates[index], value, profitChange];
+                    }),
                     smooth: true,
                     lineStyle: {
                         width: 3
                     },
                     itemStyle: {
-                        color: '#1976D2'
+                        color: '#1976D2'  // 默认颜色，会被visualMap覆盖
                     }
                 },
                 {
@@ -325,6 +334,155 @@
                 }
             ]
         };
+
+        // 在资产价值走势图上添加买卖点标记
+        for (const symbol in chartData.buy_points) {
+            const buyPoints = chartData.buy_points[symbol];
+            const sellPoints = chartData.sell_points[symbol];
+
+            // 添加买入点到资产价值图
+            for (let i = 0; i < buyPoints.dates.length; i++) {
+                const date = buyPoints.dates[i];
+                const detail = buyPoints.details && i < buyPoints.details.length ? buyPoints.details[i] : "买入";
+
+                // 查找日期索引 - 使用更灵活的方法
+                let dateIndex = -1;
+
+                // 方法1：直接匹配
+                dateIndex = chartData.dates.indexOf(date);
+
+                // 方法2：如果没找到，尝试查找最接近的日期
+                if (dateIndex === -1) {
+                    // 将日期转换为时间戳进行比较
+                    const targetDate = new Date(date).getTime();
+                    let closestIndex = -1;
+                    let minDiff = Infinity;
+
+                    for (let j = 0; j < chartData.dates.length; j++) {
+                        const currDate = new Date(chartData.dates[j]).getTime();
+                        const diff = Math.abs(currDate - targetDate);
+                        if (diff < minDiff) {
+                            minDiff = diff;
+                            closestIndex = j;
+                        }
+                    }
+
+                    // 如果找到最接近的日期，且差距不超过1天（86400000毫秒）
+                    if (closestIndex !== -1 && minDiff <= 86400000) {
+                        dateIndex = closestIndex;
+                        console.log(`资产图买入点日期 ${date} 匹配到最接近的日期 ${chartData.dates[dateIndex]}`);
+                    }
+                }
+
+                // 如果找到日期索引，添加买入点
+                if (dateIndex !== -1) {
+                    // 获取该日期的总资产值
+                    const value = chartData.values[dateIndex];
+
+                    // 添加买入点标记
+                    valueOption.series.push({
+                        name: '买入标记',
+                        type: 'scatter',
+                        data: [[dateIndex, value]],
+                        itemStyle: {
+                            color: '#FF0000'  // 鲜艳的红色
+                        },
+                        symbolSize: 15,
+                        symbol: 'arrow',
+                        symbolRotate: 180,
+                        label: {
+                            show: true,
+                            position: 'top',
+                            formatter: '买入',
+                            fontSize: 12,
+                            color: '#FF0000',
+                            backgroundColor: 'rgba(255,255,255,0.7)',
+                            padding: [2, 4],
+                            borderRadius: 3
+                        },
+                        tooltip: {
+                            formatter: function() {
+                                return detail;
+                            }
+                        }
+                    });
+                    console.log(`添加资产图买入点: 日期=${date}, 索引=${dateIndex}, 值=${value}`);
+                } else {
+                    console.log(`未找到资产图买入点日期 ${date} 对应的日期`);
+                }
+            }
+
+            // 添加卖出点到资产价值图
+            for (let i = 0; i < sellPoints.dates.length; i++) {
+                const date = sellPoints.dates[i];
+                const detail = sellPoints.details && i < sellPoints.details.length ? sellPoints.details[i] : "卖出";
+
+                // 查找日期索引 - 使用更灵活的方法
+                let dateIndex = -1;
+
+                // 方法1：直接匹配
+                dateIndex = chartData.dates.indexOf(date);
+
+                // 方法2：如果没找到，尝试查找最接近的日期
+                if (dateIndex === -1) {
+                    // 将日期转换为时间戳进行比较
+                    const targetDate = new Date(date).getTime();
+                    let closestIndex = -1;
+                    let minDiff = Infinity;
+
+                    for (let j = 0; j < chartData.dates.length; j++) {
+                        const currDate = new Date(chartData.dates[j]).getTime();
+                        const diff = Math.abs(currDate - targetDate);
+                        if (diff < minDiff) {
+                            minDiff = diff;
+                            closestIndex = j;
+                        }
+                    }
+
+                    // 如果找到最接近的日期，且差距不超过1天（86400000毫秒）
+                    if (closestIndex !== -1 && minDiff <= 86400000) {
+                        dateIndex = closestIndex;
+                        console.log(`资产图卖出点日期 ${date} 匹配到最接近的日期 ${chartData.dates[dateIndex]}`);
+                    }
+                }
+
+                // 如果找到日期索引，添加卖出点
+                if (dateIndex !== -1) {
+                    // 获取该日期的总资产值
+                    const value = chartData.values[dateIndex];
+
+                    // 添加卖出点标记
+                    valueOption.series.push({
+                        name: '卖出标记',
+                        type: 'scatter',
+                        data: [[dateIndex, value]],
+                        itemStyle: {
+                            color: '#00CC00'  // 鲜艳的绿色
+                        },
+                        symbolSize: 15,
+                        symbol: 'arrow',
+                        label: {
+                            show: true,
+                            position: 'bottom',
+                            formatter: '卖出',
+                            fontSize: 12,
+                            color: '#00CC00',
+                            backgroundColor: 'rgba(255,255,255,0.7)',
+                            padding: [2, 4],
+                            borderRadius: 3
+                        },
+                        tooltip: {
+                            formatter: function() {
+                                return detail;
+                            }
+                        }
+                    });
+                    console.log(`添加资产图卖出点: 日期=${date}, 索引=${dateIndex}, 值=${value}`);
+                } else {
+                    console.log(`未找到资产图卖出点日期 ${date} 对应的日期`);
+                }
+            }
+        }
 
         // 使用配置项显示图表
         valueChart.setOption(valueOption);
@@ -537,69 +695,176 @@
             for (const symbol in chartData.buy_points) {
                 const buyPoints = chartData.buy_points[symbol];
                 const sellPoints = chartData.sell_points[symbol];
-                
+
                 // 添加买入点
                 const buyData = [];
+                const buyDetails = [];
+
+                // 调试信息
+                console.log("买入点日期:", buyPoints.dates);
+                console.log("K线图日期:", chartData.kline_data.categoryData);
+
                 for (let i = 0; i < buyPoints.dates.length; i++) {
                     const date = buyPoints.dates[i];
                     const price = buyPoints.prices[i];
-                    const dateIndex = chartData.kline_data.categoryData.indexOf(date);
-                    if (dateIndex !== -1 && price > 0) {
-                        buyData.push([dateIndex, price]);
+                    const detail = buyPoints.details && i < buyPoints.details.length ? buyPoints.details[i] : "买入";
+
+                    // 查找日期索引 - 使用更灵活的方法
+                    let dateIndex = -1;
+
+                    // 方法1：直接匹配
+                    dateIndex = chartData.kline_data.categoryData.indexOf(date);
+
+                    // 方法2：如果没找到，尝试查找最接近的日期
+                    if (dateIndex === -1) {
+                        // 将日期转换为时间戳进行比较
+                        const targetDate = new Date(date).getTime();
+                        let closestIndex = -1;
+                        let minDiff = Infinity;
+
+                        for (let j = 0; j < chartData.kline_data.categoryData.length; j++) {
+                            const currDate = new Date(chartData.kline_data.categoryData[j]).getTime();
+                            const diff = Math.abs(currDate - targetDate);
+                            if (diff < minDiff) {
+                                minDiff = diff;
+                                closestIndex = j;
+                            }
+                        }
+
+                        // 如果找到最接近的日期，且差距不超过1天（86400000毫秒）
+                        if (closestIndex !== -1 && minDiff <= 86400000) {
+                            dateIndex = closestIndex;
+                            console.log(`买入点日期 ${date} 匹配到最接近的K线日期 ${chartData.kline_data.categoryData[dateIndex]}`);
+                        }
+                    }
+
+                    // 如果找到日期索引，添加买入点
+                    if (dateIndex !== -1) {
+                        // 获取该日期的K线价格范围
+                        const klineData = chartData.kline_data.values[dateIndex];
+                        // 如果价格为0或无效，使用K线的收盘价
+                        const validPrice = (price && price > 0) ? price : klineData[1]; // 收盘价
+
+                        buyData.push([dateIndex, validPrice]);
+                        buyDetails.push(detail);
+                        console.log(`添加买入点: 日期=${date}, 索引=${dateIndex}, 价格=${validPrice}`);
+                    } else {
+                        console.log(`未找到买入点日期 ${date} 对应的K线日期`);
                     }
                 }
-                
+
                 if (buyData.length > 0) {
                     klineOption.series.push({
                         name: '买入点',
                         type: 'scatter',
                         data: buyData,
                         itemStyle: {
-                            color: '#FF5722'
+                            color: '#FF0000'  // 更鲜艳的红色
                         },
-                        symbolSize: 10,
+                        symbolSize: 15,  // 更大的标记
                         symbol: 'arrow',
                         symbolRotate: 180,
+                        label: {
+                            show: true,
+                            position: 'top',
+                            formatter: '买入',
+                            fontSize: 12,
+                            color: '#FF0000',
+                            backgroundColor: 'rgba(255,255,255,0.7)',
+                            padding: [2, 4],
+                            borderRadius: 3
+                        },
                         tooltip: {
                             formatter: function(param) {
-                                return [
-                                    '买入点<hr size=1 style="margin: 3px 0">',
-                                    '日期: ' + chartData.kline_data.categoryData[param.data[0]] + '<br/>',
-                                    '价格: ' + param.data[1] + '<br/>'
-                                ].join('');
+                                const index = param.dataIndex;
+                                const detail = index < buyDetails.length ? buyDetails[index] : "买入";
+                                return detail;
                             }
                         }
                     });
                 }
-                
+
                 // 添加卖出点
                 const sellData = [];
+                const sellDetails = [];
+
+                // 调试信息
+                console.log("卖出点日期:", sellPoints.dates);
+
                 for (let i = 0; i < sellPoints.dates.length; i++) {
                     const date = sellPoints.dates[i];
                     const price = sellPoints.prices[i];
-                    const dateIndex = chartData.kline_data.categoryData.indexOf(date);
-                    if (dateIndex !== -1 && price > 0) {
-                        sellData.push([dateIndex, price]);
+                    const detail = sellPoints.details && i < sellPoints.details.length ? sellPoints.details[i] : "卖出";
+
+                    // 查找日期索引 - 使用更灵活的方法
+                    let dateIndex = -1;
+
+                    // 方法1：直接匹配
+                    dateIndex = chartData.kline_data.categoryData.indexOf(date);
+
+                    // 方法2：如果没找到，尝试查找最接近的日期
+                    if (dateIndex === -1) {
+                        // 将日期转换为时间戳进行比较
+                        const targetDate = new Date(date).getTime();
+                        let closestIndex = -1;
+                        let minDiff = Infinity;
+
+                        for (let j = 0; j < chartData.kline_data.categoryData.length; j++) {
+                            const currDate = new Date(chartData.kline_data.categoryData[j]).getTime();
+                            const diff = Math.abs(currDate - targetDate);
+                            if (diff < minDiff) {
+                                minDiff = diff;
+                                closestIndex = j;
+                            }
+                        }
+
+                        // 如果找到最接近的日期，且差距不超过1天（86400000毫秒）
+                        if (closestIndex !== -1 && minDiff <= 86400000) {
+                            dateIndex = closestIndex;
+                            console.log(`卖出点日期 ${date} 匹配到最接近的K线日期 ${chartData.kline_data.categoryData[dateIndex]}`);
+                        }
+                    }
+
+                    // 如果找到日期索引，添加卖出点
+                    if (dateIndex !== -1) {
+                        // 获取该日期的K线价格范围
+                        const klineData = chartData.kline_data.values[dateIndex];
+                        // 如果价格为0或无效，使用K线的收盘价
+                        const validPrice = (price && price > 0) ? price : klineData[1]; // 收盘价
+
+                        sellData.push([dateIndex, validPrice]);
+                        sellDetails.push(detail);
+                        console.log(`添加卖出点: 日期=${date}, 索引=${dateIndex}, 价格=${validPrice}`);
+                    } else {
+                        console.log(`未找到卖出点日期 ${date} 对应的K线日期`);
                     }
                 }
-                
+
                 if (sellData.length > 0) {
                     klineOption.series.push({
                         name: '卖出点',
                         type: 'scatter',
                         data: sellData,
                         itemStyle: {
-                            color: '#4CAF50'
+                            color: '#00CC00'  // 更鲜艳的绿色
                         },
-                        symbolSize: 10,
+                        symbolSize: 15,  // 更大的标记
                         symbol: 'arrow',
+                        label: {
+                            show: true,
+                            position: 'bottom',
+                            formatter: '卖出',
+                            fontSize: 12,
+                            color: '#00CC00',
+                            backgroundColor: 'rgba(255,255,255,0.7)',
+                            padding: [2, 4],
+                            borderRadius: 3
+                        },
                         tooltip: {
                             formatter: function(param) {
-                                return [
-                                    '卖出点<hr size=1 style="margin: 3px 0">',
-                                    '日期: ' + chartData.kline_data.categoryData[param.data[0]] + '<br/>',
-                                    '价格: ' + param.data[1] + '<br/>'
-                                ].join('');
+                                const index = param.dataIndex;
+                                const detail = index < sellDetails.length ? sellDetails[index] : "卖出";
+                                return detail;
                             }
                         }
                     });

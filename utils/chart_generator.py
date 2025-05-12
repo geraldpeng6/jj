@@ -467,21 +467,32 @@ def extract_cash_series(backtest_data: List[Dict[str, Any]]) -> Tuple[List[int],
 
 def extract_buy_sell_points(backtest_data: List[Dict[str, Any]]) -> Dict[str, Dict[str, List]]:
     """
-    从回测数据中提取买入卖出点
+    从回测数据中提取买入卖出点，通过跟踪钱包(id=0)的现金变化判断买入卖出
 
     Args:
         backtest_data: 回测数据列表
 
     Returns:
-        Dict[str, Dict[str, List]]: 按股票代码组织的买卖点数据
+        Dict[str, Dict[str, List]]: 按股票代码组织的买卖点数据，包含交易金额信息
     """
     # 初始化结果字典
     trade_points = {}
 
+    # 记录每个时间点的数据
+    time_data = {}
+
     # 记录每个股票的持仓状态
     symbol_positions = {}
 
+    # 记录上一个时间点的现金值
+    prev_cash_value = None
+    prev_timestamp = None
+
+    # 调试信息
+    logger.info("开始提取买卖点...")
+
     try:
+        # 第一步：收集所有时间点的数据
         for item in backtest_data:
             if not isinstance(item, dict):
                 continue
@@ -491,56 +502,166 @@ def extract_buy_sell_points(backtest_data: List[Dict[str, Any]]) -> Dict[str, Di
             if not timestamp:
                 continue
 
-            # 获取持仓信息
-            positions = item.get('positions', [])
-
-            # 当前持仓的股票集合
-            current_symbols = set()
+            # 收集该时间点的数据
+            time_data[timestamp] = {
+                'cash_value': None,
+                'positions': {},
+                'total_value': item.get('value', 0)
+            }
 
             # 处理持仓信息
+            positions = item.get('positions', [])
             for pos in positions:
-                # 只处理股票持仓（category=1）
-                if pos.get('category') != 1 or not pos.get('symbol'):
-                    continue
+                category = pos.get('category')
 
-                symbol = pos.get('symbol')
-                current_size = pos.get('size', 0)
-                current_symbols.add(symbol)
+                if category == 0:  # 现金持仓
+                    time_data[timestamp]['cash_value'] = float(pos.get('value', 0))
+                    logger.debug(f"时间点 {timestamp}: 现金值 = {time_data[timestamp]['cash_value']}")
+                elif category == 1:  # 股票持仓
+                    symbol = pos.get('symbol')
+                    if not symbol:
+                        continue
 
+                    time_data[timestamp]['positions'][symbol] = {
+                        'size': pos.get('size', 0),
+                        'price': pos.get('price', 0),
+                        'value': pos.get('value', 0)
+                    }
+                    logger.debug(f"时间点 {timestamp}: 股票 {symbol} 持仓 = {pos.get('size', 0)}, 价格 = {pos.get('price', 0)}")
+
+        # 按时间戳排序
+        sorted_timestamps = sorted(time_data.keys())
+        logger.info(f"共收集到 {len(sorted_timestamps)} 个时间点的数据")
+
+        # 第二步：分析相邻时间点的变化，识别买入卖出点
+        for i in range(1, len(sorted_timestamps)):
+            curr_ts = sorted_timestamps[i]
+            prev_ts = sorted_timestamps[i-1]
+
+            curr_data = time_data[curr_ts]
+            prev_data = time_data[prev_ts]
+
+            # 获取现金变化
+            curr_cash = curr_data['cash_value']
+            prev_cash = prev_data['cash_value']
+
+            if curr_cash is None or prev_cash is None:
+                continue
+
+            cash_change = curr_cash - prev_cash
+            logger.debug(f"时间点 {curr_ts}: 现金变化 = {cash_change}")
+
+            # 分析持仓变化
+            curr_positions = curr_data['positions']
+            prev_positions = prev_data['positions']
+
+            # 检查所有当前持仓的股票
+            for symbol, curr_pos in curr_positions.items():
                 # 如果是新的股票代码，初始化数据结构
                 if symbol not in trade_points:
                     trade_points[symbol] = {
                         'buy_timestamps': [],
                         'buy_prices': [],
+                        'buy_amounts': [],
+                        'buy_sizes': [],
                         'sell_timestamps': [],
-                        'sell_prices': []
+                        'sell_prices': [],
+                        'sell_amounts': [],
+                        'sell_sizes': []
                     }
 
-                # 检查是否是买入点
-                prev_size = symbol_positions.get(symbol, 0)
-                if current_size > prev_size:
-                    # 买入点
-                    trade_points[symbol]['buy_timestamps'].append(timestamp)
-                    trade_points[symbol]['buy_prices'].append(pos.get('price', 0))
-                elif current_size < prev_size and prev_size > 0:
-                    # 卖出点
-                    trade_points[symbol]['sell_timestamps'].append(timestamp)
-                    trade_points[symbol]['sell_prices'].append(pos.get('price', 0))
+                curr_size = curr_pos['size']
+                curr_price = curr_pos['price']
 
-                # 更新持仓记录
-                symbol_positions[symbol] = current_size
+                # 检查该股票在上一个时间点的持仓
+                prev_size = 0
+                if symbol in prev_positions:
+                    prev_size = prev_positions[symbol]['size']
 
-            # 检查是否有完全卖出的股票
-            for symbol, size in list(symbol_positions.items()):
-                if size > 0 and symbol not in current_symbols:
-                    # 股票已完全卖出
-                    if symbol in trade_points:
-                        # 使用最后一个时间戳作为卖出时间
-                        trade_points[symbol]['sell_timestamps'].append(timestamp)
-                        # 由于没有价格信息，使用0作为占位符
-                        trade_points[symbol]['sell_prices'].append(0)
-                    # 更新持仓记录
-                    symbol_positions[symbol] = 0
+                # 持仓增加，判断为买入
+                if curr_size > prev_size:
+                    size_change = curr_size - prev_size
+                    # 估算买入金额（如果现金减少，使用现金变化的绝对值；否则使用持仓价值变化）
+                    buy_amount = abs(cash_change) if cash_change < 0 else (curr_price * size_change)
+
+                    # 添加买入点
+                    trade_points[symbol]['buy_timestamps'].append(curr_ts)
+                    trade_points[symbol]['buy_prices'].append(curr_price)
+                    trade_points[symbol]['buy_amounts'].append(buy_amount)
+                    trade_points[symbol]['buy_sizes'].append(size_change)
+
+                    logger.info(f"检测到买入: 时间={curr_ts}, 股票={symbol}, 价格={curr_price}, 数量={size_change}, 金额={buy_amount}")
+
+            # 检查上一个时间点有但当前没有的股票（完全卖出）
+            for symbol, prev_pos in prev_positions.items():
+                if symbol not in curr_positions:
+                    # 如果是新的股票代码，初始化数据结构
+                    if symbol not in trade_points:
+                        trade_points[symbol] = {
+                            'buy_timestamps': [],
+                            'buy_prices': [],
+                            'buy_amounts': [],
+                            'buy_sizes': [],
+                            'sell_timestamps': [],
+                            'sell_prices': [],
+                            'sell_amounts': [],
+                            'sell_sizes': []
+                        }
+
+                    prev_size = prev_pos['size']
+                    prev_price = prev_pos['price']
+
+                    # 估算卖出金额（如果现金增加，使用现金变化；否则使用持仓价值）
+                    sell_amount = cash_change if cash_change > 0 else (prev_price * prev_size)
+
+                    # 添加卖出点
+                    trade_points[symbol]['sell_timestamps'].append(curr_ts)
+                    trade_points[symbol]['sell_prices'].append(prev_price)  # 使用上一个时间点的价格
+                    trade_points[symbol]['sell_amounts'].append(sell_amount)
+                    trade_points[symbol]['sell_sizes'].append(prev_size)
+
+                    logger.info(f"检测到完全卖出: 时间={curr_ts}, 股票={symbol}, 价格={prev_price}, 数量={prev_size}, 金额={sell_amount}")
+                elif curr_positions[symbol]['size'] < prev_pos['size']:
+                    # 部分卖出
+                    curr_size = curr_positions[symbol]['size']
+                    prev_size = prev_pos['size']
+                    size_change = prev_size - curr_size
+                    curr_price = curr_positions[symbol]['price']
+
+                    # 估算卖出金额
+                    sell_amount = cash_change if cash_change > 0 else (curr_price * size_change)
+
+                    # 添加卖出点
+                    trade_points[symbol]['sell_timestamps'].append(curr_ts)
+                    trade_points[symbol]['sell_prices'].append(curr_price)
+                    trade_points[symbol]['sell_amounts'].append(sell_amount)
+                    trade_points[symbol]['sell_sizes'].append(size_change)
+
+                    logger.info(f"检测到部分卖出: 时间={curr_ts}, 股票={symbol}, 价格={curr_price}, 数量={size_change}, 金额={sell_amount}")
+
+        # 打印提取结果
+        for symbol, points in trade_points.items():
+            buy_count = len(points['buy_timestamps'])
+            sell_count = len(points['sell_timestamps'])
+            logger.info(f"股票 {symbol}: 买入点 {buy_count} 个, 卖出点 {sell_count} 个")
+
+            # 打印买入点详情
+            for i in range(buy_count):
+                ts = points['buy_timestamps'][i]
+                price = points['buy_prices'][i]
+                amount = points['buy_amounts'][i] if i < len(points['buy_amounts']) else 0
+                size = points['buy_sizes'][i] if i < len(points['buy_sizes']) else 0
+                date_str = dt.fromtimestamp(ts / 1000).strftime('%Y-%m-%d')
+                logger.info(f"  买入点 {i+1}: 日期={date_str}, 价格={price}, 数量={size}, 金额={amount}")
+
+            # 打印卖出点详情
+            for i in range(sell_count):
+                ts = points['sell_timestamps'][i]
+                price = points['sell_prices'][i]
+                amount = points['sell_amounts'][i] if i < len(points['sell_amounts']) else 0
+                size = points['sell_sizes'][i] if i < len(points['sell_sizes']) else 0
+                date_str = dt.fromtimestamp(ts / 1000).strftime('%Y-%m-%d')
+                logger.info(f"  卖出点 {i+1}: 日期={date_str}, 价格={price}, 数量={size}, 金额={amount}")
 
         logger.info(f"成功提取买卖点，共 {len(trade_points)} 个股票")
         return trade_points
@@ -618,26 +739,69 @@ def calculate_backtest_metrics(backtest_data: List[Dict[str, Any]]) -> Dict[str,
         trade_count = 0
         win_count = 0
 
+        # 记录每个交易的盈亏情况
+        trade_results = []
+
         for symbol, points in trade_points.items():
             buy_timestamps = points.get('buy_timestamps', [])
             sell_timestamps = points.get('sell_timestamps', [])
             buy_prices = points.get('buy_prices', [])
             sell_prices = points.get('sell_prices', [])
+            buy_amounts = points.get('buy_amounts', [])
+            sell_amounts = points.get('sell_amounts', [])
+            buy_sizes = points.get('buy_sizes', [])
+            sell_sizes = points.get('sell_sizes', [])
 
             # 计算交易次数（以卖出点为准）
             symbol_trade_count = len(sell_timestamps)
             trade_count += symbol_trade_count
 
             # 计算盈利交易次数
-            for i in range(min(len(buy_prices), len(sell_prices))):
-                if sell_prices[i] > buy_prices[i]:
+            for i in range(min(len(buy_timestamps), len(sell_timestamps))):
+                # 获取买入和卖出信息
+                buy_price = buy_prices[i] if i < len(buy_prices) else 0
+                sell_price = sell_prices[i] if i < len(sell_prices) else 0
+                buy_amount = buy_amounts[i] if i < len(buy_amounts) else 0
+                sell_amount = sell_amounts[i] if i < len(sell_amounts) else 0
+                buy_size = buy_sizes[i] if i < len(buy_sizes) else 0
+                sell_size = sell_sizes[i] if i < len(sell_sizes) else 0
+
+                # 判断是否盈利
+                is_profitable = False
+
+                # 方法1：通过价格和数量判断
+                if buy_price > 0 and sell_price > 0 and buy_size > 0 and sell_size > 0:
+                    buy_value = buy_price * buy_size
+                    sell_value = sell_price * sell_size
+                    if sell_value > buy_value:
+                        is_profitable = True
+                        logger.debug(f"交易盈利(价格*数量): 买入={buy_value}, 卖出={sell_value}")
+
+                # 方法2：直接通过金额判断
+                elif buy_amount > 0 and sell_amount > 0:
+                    if sell_amount > buy_amount:
+                        is_profitable = True
+                        logger.debug(f"交易盈利(金额): 买入={buy_amount}, 卖出={sell_amount}")
+
+                # 方法3：通过价格判断（如果数量相同）
+                elif buy_price > 0 and sell_price > 0:
+                    if sell_price > buy_price:
+                        is_profitable = True
+                        logger.debug(f"交易盈利(价格): 买入={buy_price}, 卖出={sell_price}")
+
+                # 记录结果
+                if is_profitable:
                     win_count += 1
+                    trade_results.append(1)  # 盈利
+                else:
+                    trade_results.append(-1)  # 亏损
 
         metrics["trade_count"] = trade_count
 
         # 计算胜率
         if trade_count > 0:
             metrics["win_rate"] = round((win_count / trade_count) * 100, 2)
+            logger.info(f"交易次数: {trade_count}, 盈利次数: {win_count}, 胜率: {metrics['win_rate']}%")
 
         # 计算平均每笔交易收益
         if trade_count > 0:
@@ -689,7 +853,8 @@ def prepare_backtest_chart_data(
         'position_values': [],
         'buy_points': {},
         'sell_points': {},
-        'kline_data': None
+        'kline_data': None,
+        'profit_changes': []  # 添加profit_and_loss变化数组
     }
 
     try:
@@ -717,6 +882,50 @@ def prepare_backtest_chart_data(
             date_str = dt.fromtimestamp(ts / 1000).strftime('%Y-%m-%d')
             dates.append(date_str)
 
+        # 提取profit_and_loss变化
+        profit_changes = []
+        prev_profit = None
+
+        # 创建时间戳到索引的映射
+        timestamp_to_index = {ts: i for i, ts in enumerate(timestamps)}
+
+        # 遍历每个时间点的数据
+        for item in backtest_data:
+            if not isinstance(item, dict):
+                continue
+
+            # 获取时间戳
+            timestamp = item.get('tm')
+            if not timestamp or timestamp not in timestamp_to_index:
+                continue
+
+            # 获取该时间戳在列表中的索引
+            index = timestamp_to_index[timestamp]
+
+            # 获取现金持仓的profit_and_loss
+            current_profit = None
+            positions = item.get('positions', [])
+            for pos in positions:
+                if pos.get('category') == 0:  # 现金持仓
+                    current_profit = pos.get('profit_and_loss')
+                    break
+
+            # 如果是第一个点，或者无法获取profit_and_loss，使用0表示无变化
+            if prev_profit is None or current_profit is None:
+                profit_changes.append(0)  # 0表示无变化
+            else:
+                # 计算profit_and_loss变化
+                change = current_profit - prev_profit
+                profit_changes.append(change)
+
+            # 更新前一个profit_and_loss值
+            prev_profit = current_profit
+
+        # 确保profit_changes数组长度与时间戳一致
+        if len(profit_changes) < len(timestamps):
+            # 如果数组不足，用0填充
+            profit_changes.extend([0] * (len(timestamps) - len(profit_changes)))
+
         # 提取买卖点
         trade_points = extract_buy_sell_points(backtest_data)
         buy_points = {}
@@ -725,8 +934,12 @@ def prepare_backtest_chart_data(
         for symbol, points in trade_points.items():
             buy_timestamps = points.get('buy_timestamps', [])
             buy_prices = points.get('buy_prices', [])
+            buy_amounts = points.get('buy_amounts', [])
+            buy_sizes = points.get('buy_sizes', [])
             sell_timestamps = points.get('sell_timestamps', [])
             sell_prices = points.get('sell_prices', [])
+            sell_amounts = points.get('sell_amounts', [])
+            sell_sizes = points.get('sell_sizes', [])
 
             # 转换买入点时间戳为日期字符串
             buy_dates = []
@@ -740,14 +953,52 @@ def prepare_backtest_chart_data(
                 date_str = dt.fromtimestamp(ts / 1000).strftime('%Y-%m-%d')
                 sell_dates.append(date_str)
 
+            # 准备买入点详情文本
+            buy_details = []
+            for i in range(len(buy_prices)):
+                price = buy_prices[i]
+                amount = buy_amounts[i] if i < len(buy_amounts) else 0
+                size = buy_sizes[i] if i < len(buy_sizes) else 0
+
+                if amount > 0 and size > 0:
+                    detail = f"买入 {symbol}\n价格: {round(price, 2)}元\n数量: {size}股\n金额: {round(amount, 2)}元"
+                elif amount > 0:
+                    detail = f"买入 {symbol}\n价格: {round(price, 2)}元\n金额: {round(amount, 2)}元"
+                else:
+                    detail = f"买入 {symbol}\n价格: {round(price, 2)}元"
+
+                buy_details.append(detail)
+
+            # 准备卖出点详情文本
+            sell_details = []
+            for i in range(len(sell_prices)):
+                price = sell_prices[i]
+                amount = sell_amounts[i] if i < len(sell_amounts) else 0
+                size = sell_sizes[i] if i < len(sell_sizes) else 0
+
+                if amount > 0 and size > 0:
+                    detail = f"卖出 {symbol}\n价格: {round(price, 2)}元\n数量: {size}股\n金额: {round(amount, 2)}元"
+                elif amount > 0:
+                    detail = f"卖出 {symbol}\n价格: {round(price, 2)}元\n金额: {round(amount, 2)}元"
+                else:
+                    detail = f"卖出 {symbol}\n价格: {round(price, 2)}元"
+
+                sell_details.append(detail)
+
             buy_points[symbol] = {
                 'dates': buy_dates,
-                'prices': buy_prices
+                'prices': buy_prices,
+                'details': buy_details,
+                'amounts': buy_amounts,
+                'sizes': buy_sizes
             }
 
             sell_points[symbol] = {
                 'dates': sell_dates,
-                'prices': sell_prices
+                'prices': sell_prices,
+                'details': sell_details,
+                'amounts': sell_amounts,
+                'sizes': sell_sizes
             }
 
         # 准备K线数据（如果提供）
@@ -764,6 +1015,7 @@ def prepare_backtest_chart_data(
         chart_data['buy_points'] = buy_points
         chart_data['sell_points'] = sell_points
         chart_data['kline_data'] = kline_data
+        chart_data['profit_changes'] = profit_changes  # 添加profit_and_loss变化数据
 
         logger.info("成功准备回测图表数据")
         return chart_data
