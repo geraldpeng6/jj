@@ -73,15 +73,9 @@ async def get_kline_data(
         # 格式化输出
         result_str = f"成功获取 {symbol} 的K线数据，共 {len(df)} 条记录\n\n"
 
-        # 显示前5条和后5条数据
-        if len(df) > 10:
-            result_str += "前5条数据:\n"
-            result_str += df.head(5).to_string() + "\n\n"
-            result_str += "后5条数据:\n"
-            result_str += df.tail(5).to_string() + "\n"
-        else:
-            result_str += "数据:\n"
-            result_str += df.to_string() + "\n"
+        # 显示所有数据
+        result_str += "所有数据:\n"
+        result_str += df.to_string() + "\n"
 
         # 添加保存信息
         result_str += f"\n数据已保存到: {file_path}"
