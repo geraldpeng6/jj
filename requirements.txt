@@ -1,11 +1,17 @@
 # 量化交易助手 MCP 服务器依赖
-mcp>=0.1.0  # Model Context Protocol
+mcp>=1.7.0  # Model Context Protocol，支持streamable_http传输
 pandas>=2.0.0
 requests>=2.28.0
 jinja2>=3.1.0
 numpy>=1.24.0
 paho-mqtt>=2.0.0  # MQTT客户端
 pysocks>=1.7.1  # SOCKS代理支持
+uvicorn>=0.25.0  # ASGI服务器，用于HTTP传输
+fastapi>=0.110.0  # 用于HTTP API
+python-dotenv>=1.0.0  # 环境变量管理
+gunicorn>=21.2.0  # 生产环境WSGI HTTP服务器
+# 以下是可选依赖
+# psutil>=5.9.0  # 系统和进程监控
 # 以下是内置模块，不需要安装
 # logging
 # webbrowser
@@ -16,3 +22,4 @@ pysocks>=1.7.1  # SOCKS代理支持
 # gzip
 # io
 # re
+# argparse
