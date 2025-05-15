@@ -8,10 +8,15 @@
 """
 
 import logging
-from typing import Optional
+import os
+import time
+from typing import Optional, Dict, Any
 from mcp.server.fastmcp import FastMCP
 
-from utils.backtest_utils import run_backtest, format_choose_stock
+from utils.backtest_utils import run_backtest, format_choose_stock, load_backtest_data
+from utils.chart_generator import generate_backtest_html_content
+from utils.static_server import save_html_file
+from utils.kline_utils import fetch_kline_data
 
 # 获取日志记录器
 logger = logging.getLogger('quant_mcp.backtest_tools')
@@ -25,7 +30,10 @@ async def run_strategy_backtest(
     indicator: Optional[str] = None,
     control_risk: Optional[str] = None,
     timing: Optional[str] = None,
-    choose_stock: Optional[str] = None
+    choose_stock: Optional[str] = None,
+    http_mode: bool = False,
+    server_host: str = None,
+    server_port: int = None
 ) -> str:
     """
     运行策略回测
@@ -42,6 +50,9 @@ async def run_strategy_backtest(
                      1. 完整的choose_stock函数代码，以"def choose_stock(context):"开头
                      2. 单个股票代码，如"600000.XSHG"
                      3. 多个股票代码，如"600000.XSHG&000001.XSHE"，用"&"符号分隔多个股票代码
+        http_mode: 是否使用HTTP模式，如果为True，则返回URL而不是打开浏览器，默认为 False
+        server_host: HTTP服务器主机地址，仅在http_mode=True时有效
+        server_port: HTTP服务器端口，仅在http_mode=True时有效
 
     Returns:
         str: 回测结果信息，或错误信息
@@ -111,7 +122,68 @@ async def run_strategy_backtest(
             result_str += f"接收到 {result['position_count']} 条position数据\n"
             result_str += f"数据已保存到: {result['file_path']}\n"
 
-            if result.get('chart_path'):
+            # 如果是HTTP模式，直接返回HTML内容
+            if http_mode:
+                try:
+                    # 加载回测数据
+                    backtest_data = load_backtest_data(result['file_path'])
+                    if not backtest_data:
+                        result_str += "\n无法加载回测数据，请检查文件是否存在"
+                        return result_str
+
+                    # 获取股票信息
+                    symbol = None
+                    exchange = None
+                    if stock_info and "&" not in stock_info and "." in stock_info:
+                        # 单个股票代码，格式为 "600000.XSHG"
+                        symbol, exchange = stock_info.split(".")
+
+                    # 获取K线数据
+                    kline_df = None
+                    if symbol and exchange:
+                        success, kline_df = fetch_kline_data(
+                            symbol=symbol,
+                            exchange=exchange,
+                            resolution="1D"  # 默认使用日线
+                        )
+
+                        if not success or kline_df is None or kline_df.empty:
+                            logger.warning(f"获取K线数据失败: {symbol}.{exchange}")
+
+                    # 生成HTML内容
+                    html_content = generate_backtest_html_content(
+                        backtest_data=backtest_data,
+                        strategy_name=result['strategy_name'],
+                        strategy_id=strategy_id,
+                        kline_df=kline_df,
+                        symbol=symbol,
+                        exchange=exchange
+                    )
+
+                    if not html_content:
+                        result_str += "\n生成回测结果图表失败"
+                        return result_str
+
+                    # 生成文件名
+                    timestamp = int(time.time())
+                    if symbol and exchange:
+                        file_name = f"backtest_{strategy_id}_{symbol}_{exchange}_{timestamp}.html"
+                    else:
+                        file_name = f"backtest_{strategy_id}_{timestamp}.html"
+
+                    # 保存HTML内容到文件并获取URL
+                    success, file_path, url = save_html_file(html_content, file_name, "backtests")
+
+                    if not success:
+                        result_str += f"\n保存回测结果图表失败: {file_path}"
+                        return result_str
+
+                    # 添加URL信息
+                    result_str += f"\n回测结果图表已生成并可通过以下URL访问:\n{url}"
+                except Exception as e:
+                    logger.error(f"处理HTTP模式回测结果时发生错误: {e}")
+                    result_str += f"\n处理HTTP模式回测结果时发生错误: {e}"
+            elif result.get('chart_path'):
                 result_str += f"\n回测结果图表已生成并在浏览器中打开: {result['chart_path']}"
             else:
                 result_str += "\n未生成回测结果图表"

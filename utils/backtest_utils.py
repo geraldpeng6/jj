@@ -27,6 +27,9 @@ from utils.kline_utils import fetch_and_save_kline
 from utils.chart_generator import open_in_browser, generate_backtest_html, load_backtest_data
 from utils.symbol_utils import validate_date_range
 
+# 导出load_backtest_data函数，方便其他模块使用
+__all__ = ['run_backtest', 'format_choose_stock', 'load_backtest_data']
+
 # 获取日志记录器
 logger = logging.getLogger('quant_mcp.backtest_utils')
 

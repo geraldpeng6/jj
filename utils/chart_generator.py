@@ -5,6 +5,7 @@
 图表生成模块
 
 提供K线图表生成和浏览器显示功能，以及回测结果分析和可视化
+支持本地文件生成和HTTP响应内容生成两种模式
 """
 
 import os
@@ -298,6 +299,94 @@ def open_in_browser(file_path: str) -> bool:
     except Exception as e:
         logger.error(f"在浏览器中打开文件时发生错误: {e}")
         return False
+
+
+def generate_html_content(
+    df: pd.DataFrame,
+    symbol: str,
+    exchange: str,
+    resolution: str = "1D",
+    fq: str = "post"
+) -> Optional[str]:
+    """
+    生成K线图表HTML内容，不保存为文件，用于HTTP响应
+
+    Args:
+        df: 包含K线数据的DataFrame
+        symbol: 股票代码
+        exchange: 交易所代码
+        resolution: 时间周期
+        fq: 复权方式
+
+    Returns:
+        Optional[str]: 生成的HTML内容，如果生成失败则返回None
+    """
+    try:
+        # 准备数据
+        chart_data = df.copy()
+
+        # 确保时间列是日期时间类型
+        if 'time' in chart_data.columns:
+            chart_data['time'] = pd.to_datetime(chart_data['time'])
+
+        # 检查模板文件是否存在
+        if not os.path.exists(TEMPLATE_PATH):
+            logger.error(f"模板文件不存在: {TEMPLATE_PATH}")
+            return None
+
+        # 读取模板文件
+        with open(TEMPLATE_PATH, 'r', encoding='utf-8') as f:
+            template_content = f.read()
+
+        # 创建Jinja2模板
+        template = Template(template_content)
+
+        # 准备ECharts数据
+        echarts_data = prepare_echarts_data(chart_data)
+
+        # 计算统计数据
+        stats = calculate_stats(chart_data)
+
+        # 复权方式名称
+        fq_name_map = {
+            "post": "后复权",
+            "pre": "前复权",
+            "none": "不复权"
+        }
+        fq_name = fq_name_map.get(fq, fq)
+
+        # 日期范围
+        if len(chart_data) > 0:
+            start_date = chart_data['time'].min().strftime('%Y-%m-%d')
+            end_date = chart_data['time'].max().strftime('%Y-%m-%d')
+            date_range = f"{start_date} 至 {end_date}"
+        else:
+            date_range = "无数据"
+
+        # 渲染模板
+        html_content = template.render(
+            title=f"{symbol}.{exchange} {resolution}",
+            symbol=symbol,
+            exchange=exchange,
+            resolution=resolution,
+            fq_name=fq_name,
+            date_range=date_range,
+            data_count=stats['data_count'],
+            highest_price=stats['highest_price'],
+            lowest_price=stats['lowest_price'],
+            price_change=stats['price_change'],
+            price_change_class=stats['price_change_class'],
+            volatility=stats['volatility'],
+            avg_volume=stats['avg_volume'],
+            kline_data=json.dumps(echarts_data),
+            generation_time=datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        )
+
+        logger.info(f"K线图表HTML内容已生成: {symbol}.{exchange}")
+        return html_content
+    except Exception as e:
+        logger.error(f"生成K线图表HTML内容时发生错误: {e}")
+        return None
 
 
 def load_backtest_data(file_path: str) -> List[Dict[str, Any]]:
@@ -1068,6 +1157,75 @@ def analyze_backtest_result(
         )
     except Exception as e:
         logger.error(f"分析回测结果时发生错误: {e}")
+        return None
+
+
+def generate_backtest_html_content(
+    backtest_data: List[Dict[str, Any]],
+    strategy_name: str,
+    strategy_id: str,
+    kline_df: pd.DataFrame = None,
+    symbol: str = None,
+    exchange: str = None
+) -> Optional[str]:
+    """
+    生成回测结果HTML内容，不保存为文件，用于HTTP响应
+
+    Args:
+        backtest_data: 回测数据列表
+        strategy_name: 策略名称
+        strategy_id: 策略ID
+        kline_df: K线数据DataFrame，可选
+        symbol: 股票代码，可选
+        exchange: 交易所代码，可选
+
+    Returns:
+        Optional[str]: 生成的HTML内容，如果生成失败则返回None
+    """
+    try:
+        # 检查模板文件是否存在
+        if not os.path.exists(BACKTEST_TEMPLATE_PATH):
+            logger.error(f"回测结果模板文件不存在: {BACKTEST_TEMPLATE_PATH}")
+            return None
+
+        # 读取模板文件
+        with open(BACKTEST_TEMPLATE_PATH, 'r', encoding='utf-8') as f:
+            template_content = f.read()
+
+        # 创建Jinja2模板
+        template = Template(template_content)
+
+        # 计算回测指标
+        metrics = calculate_backtest_metrics(backtest_data)
+
+        # 准备图表数据
+        chart_data = prepare_backtest_chart_data(backtest_data, kline_df)
+
+        # 日期范围
+        if chart_data['dates']:
+            start_date = chart_data['dates'][0]
+            end_date = chart_data['dates'][-1]
+            date_range = f"{start_date} 至 {end_date}"
+        else:
+            date_range = "无数据"
+
+        # 渲染模板
+        html_content = template.render(
+            title=f"回测结果 - {strategy_name}",
+            strategy_name=strategy_name,
+            strategy_id=strategy_id,
+            symbol=symbol or "多股票",
+            exchange=exchange or "",
+            date_range=date_range,
+            metrics=metrics,
+            chart_data=json.dumps(chart_data),
+            generation_time=datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        )
+
+        logger.info(f"回测结果HTML内容已生成: 策略ID={strategy_id}")
+        return html_content
+    except Exception as e:
+        logger.error(f"生成回测结果HTML内容时发生错误: {e}")
         return None
 
 

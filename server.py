@@ -92,6 +92,7 @@ def run_server(transport: str = 'stdio', host: str = '0.0.0.0', port: int = 8000
             if stateless:
                 logger.info("使用MCP内置的streamable_http服务器")
                 print("使用MCP内置的streamable_http服务器")
+                print("注意: 可以使用http_mode=True参数来获取HTML内容")
 
         # 运行服务器
         mcp.run(transport=transport)
