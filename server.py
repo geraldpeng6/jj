@@ -43,6 +43,16 @@ def create_server(name: str = "量化交易助手", stateless_http: bool = False
     register_all_prompts(mcp)    # 注册提示模板
     register_all_sampling(mcp)   # 注册采样配置
 
+    # 配置HTTP头部
+    http_accept = os.environ.get("HTTP_ACCEPT_HEADER", "application/json, text/event-stream")
+    logger.info(f"设置HTTP Accept头: {http_accept}")
+
+    # 设置HTTP头部
+    if hasattr(mcp, 'settings') and hasattr(mcp.settings, 'http_headers'):
+        mcp.settings.http_headers = {
+            "Accept": http_accept
+        }
+
     if stateless_http:
         logger.info("将使用无状态HTTP模式")
 
@@ -84,9 +94,24 @@ def run_server(transport: str = 'stdio', host: str = '0.0.0.0', port: int = 8000
             # 对于streamable-http传输协议，需要设置主机和端口
             logger.info(f"HTTP服务器监听地址: {host}:{port}")
             print(f"HTTP服务器监听地址: {host}:{port}")
+
             # 设置服务器主机和端口
             mcp.settings.host = host
             mcp.settings.port = port
+
+            # 设置HTTP头部
+            http_accept = os.environ.get("HTTP_ACCEPT_HEADER", "application/json, text/event-stream")
+            logger.info(f"HTTP Accept头: {http_accept}")
+            print(f"HTTP Accept头: {http_accept}")
+
+            # 确保FastAPI应用程序正确配置
+            if hasattr(mcp, 'streamable_http_app'):
+                @mcp.streamable_http_app.middleware("http")
+                async def add_accept_headers(request, call_next):
+                    response = await call_next(request)
+                    # 确保响应头包含正确的内容类型
+                    response.headers["Accept"] = http_accept
+                    return response
 
             # 如果使用streamable-http传输协议，直接使用MCP的streamable_http_app
             if stateless:

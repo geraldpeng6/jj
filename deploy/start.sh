@@ -76,12 +76,12 @@ done
 if [ -f "${ENV_FILE}" ]; then
     print_message "加载环境变量文件: ${ENV_FILE}"
     source "${ENV_FILE}"
-    
+
     # 如果环境变量文件中有设置，则使用环境变量中的值
     if [ ! -z "${MCP_HOST}" ]; then
         HOST="${MCP_HOST}"
     fi
-    
+
     if [ ! -z "${MCP_PORT}" ]; then
         PORT="${MCP_PORT}"
     fi
@@ -109,8 +109,17 @@ print_message "端口: ${PORT}"
 export MCP_SERVER_HOST="${MCP_SERVER_HOST:-localhost}"
 export MCP_SERVER_PORT="${MCP_SERVER_PORT:-80}"
 export MCP_SERVER_PROTOCOL="${MCP_SERVER_PROTOCOL:-http}"
+export HTTP_ACCEPT_HEADER="${HTTP_ACCEPT_HEADER:-application/json, text/event-stream}"
+
+# 获取传输协议配置
+TRANSPORT="${MCP_TRANSPORT:-streamable-http}"
+STATELESS="${MCP_STATELESS:-true}"
+
+print_message "传输协议: ${TRANSPORT}"
+print_message "无状态模式: ${STATELESS}"
+print_message "HTTP接受头: ${HTTP_ACCEPT_HEADER}"
 
 # 启动服务
-python server.py --transport streamable-http --host "${HOST}" --port "${PORT}" --stateless
+python server.py --transport "${TRANSPORT}" --host "${HOST}" --port "${PORT}" $([ "${STATELESS}" == "true" ] && echo "--stateless")
 
 print_success "MCP服务已启动"
