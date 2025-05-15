@@ -45,12 +45,15 @@ def create_server(name: str = "量化交易助手", stateless_http: bool = False
 
     # 配置HTTP头部
     http_accept = os.environ.get("HTTP_ACCEPT_HEADER", "application/json, text/event-stream")
+    http_content_type = os.environ.get("HTTP_CONTENT_TYPE", "text/event-stream")
     logger.info(f"设置HTTP Accept头: {http_accept}")
+    logger.info(f"设置HTTP Content-Type头: {http_content_type}")
 
     # 设置HTTP头部
     if hasattr(mcp, 'settings') and hasattr(mcp.settings, 'http_headers'):
         mcp.settings.http_headers = {
-            "Accept": http_accept
+            "Accept": http_accept,
+            "Content-Type": http_content_type
         }
 
     if stateless_http:
@@ -101,17 +104,20 @@ def run_server(transport: str = 'stdio', host: str = '0.0.0.0', port: int = 8000
 
             # 设置HTTP头部
             http_accept = os.environ.get("HTTP_ACCEPT_HEADER", "application/json, text/event-stream")
+            http_content_type = os.environ.get("HTTP_CONTENT_TYPE", "text/event-stream")
             logger.info(f"HTTP Accept头: {http_accept}")
+            logger.info(f"HTTP Content-Type头: {http_content_type}")
             print(f"HTTP Accept头: {http_accept}")
+            print(f"HTTP Content-Type头: {http_content_type}")
 
-            # 确保FastAPI应用程序正确配置
-            if hasattr(mcp, 'streamable_http_app'):
-                @mcp.streamable_http_app.middleware("http")
-                async def add_accept_headers(request, call_next):
-                    response = await call_next(request)
-                    # 确保响应头包含正确的内容类型
-                    response.headers["Accept"] = http_accept
-                    return response
+            # 设置MCP的HTTP头部
+            if hasattr(mcp, 'settings') and hasattr(mcp.settings, 'http_headers'):
+                mcp.settings.http_headers = {
+                    "Accept": http_accept,
+                    "Content-Type": http_content_type
+                }
+                logger.info("已设置MCP HTTP头部")
+                print("已设置MCP HTTP头部")
 
             # 如果使用streamable-http传输协议，直接使用MCP的streamable_http_app
             if stateless:

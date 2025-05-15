@@ -189,8 +189,8 @@ pip install gunicorn uvicorn
 print_message "创建环境配置文件..."
 if [ -f "deploy/.env.example" ]; then
     cp deploy/.env.example deploy/.env
-    
-    # 设置服务器URL
+
+    # 设置服务器URL和SSE配置
     if [ "$USE_SSL" = true ]; then
         sed -i "s|MCP_SERVER_HOST=.*|MCP_SERVER_HOST=$SERVER_HOST|g" deploy/.env
         sed -i "s|MCP_SERVER_PORT=.*|MCP_SERVER_PORT=443|g" deploy/.env
@@ -200,7 +200,32 @@ if [ -f "deploy/.env.example" ]; then
         sed -i "s|MCP_SERVER_PORT=.*|MCP_SERVER_PORT=$SERVER_PORT|g" deploy/.env
         sed -i "s|MCP_SERVER_PROTOCOL=.*|MCP_SERVER_PROTOCOL=http|g" deploy/.env
     fi
-    
+
+    # 确保SSE模式配置正确
+    if grep -q "HTTP_ACCEPT_HEADER" deploy/.env; then
+        sed -i "s|HTTP_ACCEPT_HEADER=.*|HTTP_ACCEPT_HEADER=\"text/event-stream, application/json\"|g" deploy/.env
+    else
+        echo "HTTP_ACCEPT_HEADER=\"text/event-stream, application/json\"" >> deploy/.env
+    fi
+
+    if grep -q "HTTP_CONTENT_TYPE" deploy/.env; then
+        sed -i "s|HTTP_CONTENT_TYPE=.*|HTTP_CONTENT_TYPE=\"text/event-stream\"|g" deploy/.env
+    else
+        echo "HTTP_CONTENT_TYPE=\"text/event-stream\"" >> deploy/.env
+    fi
+
+    if grep -q "MCP_TRANSPORT" deploy/.env; then
+        sed -i "s|MCP_TRANSPORT=.*|MCP_TRANSPORT=streamable-http|g" deploy/.env
+    else
+        echo "MCP_TRANSPORT=streamable-http" >> deploy/.env
+    fi
+
+    if grep -q "MCP_STATELESS" deploy/.env; then
+        sed -i "s|MCP_STATELESS=.*|MCP_STATELESS=true|g" deploy/.env
+    else
+        echo "MCP_STATELESS=true" >> deploy/.env
+    fi
+
     print_success "环境配置文件创建成功"
 else
     print_warning "deploy/.env.example不存在，跳过创建环境配置文件"
@@ -211,10 +236,10 @@ print_message "修改静态文件服务模块..."
 if [ -f "utils/static_server.py" ]; then
     # 备份原文件
     cp utils/static_server.py utils/static_server.py.bak
-    
+
     # 修改URL生成逻辑
     sed -i 's|url = f"file://{os.path.abspath(file_path)}"|server_url = get_server_url()\nurl = f"{server_url}/static/{rel_path}"|g' utils/static_server.py
-    
+
     print_success "静态文件服务模块修改成功"
 else
     print_warning "utils/static_server.py不存在，跳过修改静态文件服务模块"
@@ -234,7 +259,7 @@ server {
 
     client_max_body_size 100M;
 
-    # MCP API
+    # MCP API - 配置SSE支持
     location /mcp {
         proxy_pass http://127.0.0.1:8000;
         proxy_http_version 1.1;
@@ -244,7 +269,13 @@ server {
         proxy_set_header X-Real-IP \$remote_addr;
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto \$scheme;
+
+        # SSE配置
+        proxy_set_header Accept "text/event-stream, application/json";
+        proxy_cache off;
         proxy_buffering off;
+        proxy_read_timeout 3600s;
+        proxy_send_timeout 3600s;
     }
 
     # 静态文件
@@ -286,6 +317,10 @@ User=$USERNAME
 Group=$USERGROUP
 WorkingDirectory=$PROJECT_DIR
 Environment="PATH=$PROJECT_DIR/.venv/bin:/usr/local/bin:/usr/bin:/bin"
+Environment="HTTP_ACCEPT_HEADER=text/event-stream, application/json"
+Environment="HTTP_CONTENT_TYPE=text/event-stream"
+Environment="MCP_TRANSPORT=streamable-http"
+Environment="MCP_STATELESS=true"
 ExecStart=$PROJECT_DIR/.venv/bin/python server.py --transport streamable-http --host 0.0.0.0 --port 8000 --stateless
 Restart=always
 RestartSec=5
@@ -309,13 +344,13 @@ if command -v ufw > /dev/null; then
         ufw allow 443/tcp
     fi
     ufw allow 22/tcp  # SSH
-    
+
     # 如果防火墙未启用，启用它
     if ! ufw status | grep -q "Status: active"; then
         print_warning "防火墙未启用，正在启用..."
         echo "y" | ufw enable
     fi
-    
+
     print_success "防火墙配置成功"
 else
     print_warning "未找到ufw，跳过防火墙配置"
