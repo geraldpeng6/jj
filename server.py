@@ -4,7 +4,7 @@
 """
 MCP服务器入口
 启动MCP服务器，注册工具、资源、提示模板和采样配置
-支持stdio和streamable_http传输协议
+支持stdio、streamable_http和sse传输协议
 """
 
 import sys
@@ -48,15 +48,16 @@ def create_server(name: str = "量化交易助手", stateless_http: bool = False
 
     return mcp
 
-def run_server(transport: str = 'stdio', host: str = '0.0.0.0', port: int = 8000, stateless: bool = False):
+def run_server(transport: str = 'stdio', host: str = '0.0.0.0', port: int = 8000, stateless: bool = False, mount_path: str = '/'):
     """
     运行MCP服务器
 
     Args:
-        transport: 传输协议，可选 'stdio', 'streamable-http'
+        transport: 传输协议，可选 'stdio', 'streamable-http', 'sse'
         host: HTTP服务器主机地址，默认为0.0.0.0（所有网络接口）
         port: HTTP服务器端口，默认为8000
         stateless: 是否使用无状态HTTP模式，适用于云服务器部署
+        mount_path: SSE服务器挂载路径，默认为根路径'/'
     """
     try:
         # 确保必要的目录存在
@@ -80,19 +81,29 @@ def run_server(transport: str = 'stdio', host: str = '0.0.0.0', port: int = 8000
         logger.info(f"启动MCP服务器，使用 {transport} 传输协议")
         print(f"启动量化交易助手MCP服务器，使用 {transport} 传输协议")
 
-        if transport == 'streamable-http':
-            # 对于streamable-http传输协议，需要设置主机和端口
+        if transport in ['streamable-http', 'sse']:
+            # 对于HTTP相关的传输协议，需要设置主机和端口
             logger.info(f"HTTP服务器监听地址: {host}:{port}")
             print(f"HTTP服务器监听地址: {host}:{port}")
             # 设置服务器主机和端口
             mcp.settings.host = host
             mcp.settings.port = port
 
-            # 如果使用streamable-http传输协议，直接使用MCP的streamable_http_app
-            if stateless:
-                logger.info("使用MCP内置的streamable_http服务器")
-                print("使用MCP内置的streamable_http服务器")
-                print("注意: 可以使用http_mode=True参数来获取HTML内容")
+            if transport == 'streamable-http':
+                # 如果使用streamable-http传输协议，直接使用MCP的streamable_http_app
+                if stateless:
+                    logger.info("使用MCP内置的streamable_http服务器")
+                    print("使用MCP内置的streamable_http服务器")
+                    print("注意: 可以使用http_mode=True参数来获取HTML内容")
+
+            elif transport == 'sse':
+                # 如果使用SSE传输协议，设置挂载路径
+                logger.info(f"SSE服务器挂载路径: {mount_path}")
+                print(f"SSE服务器挂载路径: {mount_path}")
+                mcp.settings.mount_path = mount_path
+                logger.info("使用MCP内置的SSE服务器")
+                print("使用MCP内置的SSE服务器")
+                print("注意: SSE传输支持Server-Sent Events流式响应")
 
         # 运行服务器
         mcp.run(transport=transport)
@@ -105,14 +116,16 @@ if __name__ == "__main__":
     # 解析命令行参数
     parser = argparse.ArgumentParser(description='量化交易助手MCP服务器')
     parser.add_argument('--transport', '-t', type=str, default='stdio',
-                        choices=['stdio', 'streamable-http'],
-                        help='传输协议: stdio或streamable-http')
+                        choices=['stdio', 'streamable-http', 'sse'],
+                        help='传输协议: stdio、streamable-http或sse')
     parser.add_argument('--host', type=str, default='0.0.0.0',
                         help='HTTP服务器主机地址 (默认: 0.0.0.0)')
     parser.add_argument('--port', '-p', type=int, default=8000,
                         help='HTTP服务器端口 (默认: 8000)')
     parser.add_argument('--stateless', action='store_true',
                         help='使用无状态HTTP模式 (推荐用于云服务器部署)')
+    parser.add_argument('--mount-path', type=str, default='/',
+                        help='SSE服务器挂载路径 (默认: /)')
 
     args = parser.parse_args()
 
@@ -121,5 +134,6 @@ if __name__ == "__main__":
         transport=args.transport,
         host=args.host,
         port=args.port,
-        stateless=args.stateless
+        stateless=args.stateless,
+        mount_path=args.mount_path
     )
