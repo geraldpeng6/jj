@@ -29,6 +29,14 @@ except ImportError:
     def get_file_url(*args, **kwargs):
         return None
 
+# 导入Nginx工具模块
+try:
+    from utils.nginx_utils import get_chart_url
+except ImportError:
+    # 如果导入失败，提供空函数
+    def get_chart_url(*args, **kwargs):
+        return None
+
 # 获取日志记录器
 logger = logging.getLogger('quant_mcp.chart_generator')
 
@@ -304,14 +312,20 @@ def open_in_browser(file_path: str, use_web_server: bool = True) -> bool:
 
         # 如果使用Web服务器
         if use_web_server:
-            # 尝试启动Web服务器
+            # 首先尝试使用Nginx工具获取URL
+            file_url = get_chart_url(file_path)
+            if file_url:
+                logger.info(f"已通过Nginx获取文件URL: {file_url}")
+                return True
+
+            # 如果Nginx不可用，尝试启动内置Web服务器
             port = start_server()
             if port is not None:
                 # 获取文件URL
                 file_url = get_file_url(file_path)
                 if file_url:
                     # 不自动打开浏览器，只记录URL
-                    logger.info(f"已获取文件URL")
+                    logger.info(f"已通过内置Web服务器获取文件URL: {file_url}")
                     return True
                 else:
                     logger.warning(f"无法获取文件URL")

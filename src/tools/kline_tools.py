@@ -15,6 +15,7 @@ from mcp.server.fastmcp import FastMCP
 from utils.chart_generator import generate_html, open_in_browser
 from utils.kline_utils import fetch_and_save_kline
 from utils.web_server import start_server, get_file_url, get_all_urls, diagnose_network
+from utils.nginx_utils import get_chart_url
 
 # 获取日志记录器
 logger = logging.getLogger('quant_mcp.kline_tools')
@@ -175,6 +176,21 @@ async def get_kline_data_with_url(
 
         if not chart_file:
             return f"成功获取 {symbol} 的K线数据，共 {len(df)} 条记录，但生成图表失败\n\nCSV数据已保存到: {file_path}"
+
+        # 首先尝试使用Nginx获取URL
+        nginx_url = get_chart_url(chart_file)
+
+        # 如果Nginx URL可用，直接使用它
+        if nginx_url:
+            # 格式化输出
+            result_str = f"成功获取 {symbol} 的K线数据，共 {len(df)} 条记录\n\n"
+            result_str += "图表URL:\n"
+            result_str += f"- 访问地址: {nginx_url}\n\n"
+            result_str += "您可以通过上述URL在浏览器中访问K线图表\n"
+            return result_str
+
+        # 如果Nginx不可用，尝试使用内置Web服务器
+        logger.info("Nginx URL不可用，尝试使用内置Web服务器")
 
         # 启动Web服务器（如果尚未启动）
         port = start_server()

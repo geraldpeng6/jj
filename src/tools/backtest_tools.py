@@ -15,6 +15,7 @@ from mcp.server.fastmcp import FastMCP
 from utils.backtest_utils import run_backtest, format_choose_stock
 from utils.chart_generator import open_in_browser
 from utils.web_server import start_server, get_file_url, get_all_urls
+from utils.nginx_utils import get_chart_url
 
 # 获取日志记录器
 logger = logging.getLogger('quant_mcp.backtest_tools')
@@ -195,6 +196,27 @@ async def run_strategy_backtest_with_url(
         chart_path = result.get('chart_path')
         if not chart_path or not os.path.exists(chart_path):
             return f"回测成功完成，但未生成图表文件\n\n策略: {result['strategy_name']} (ID: {result['strategy_id']})\n接收到 {result['position_count']} 条position数据"
+
+        # 首先尝试使用Nginx获取URL
+        nginx_url = get_chart_url(chart_path)
+
+        # 如果Nginx URL可用，直接使用它
+        if nginx_url:
+            # 格式化输出
+            if stock_info and not stock_info.startswith("def choose_stock"):
+                result_str = f"使用股票 {stock_info} 回测成功完成！\n\n"
+            else:
+                result_str = f"使用策略自带标的进行，回测成功完成！\n\n"
+
+            result_str += f"策略: {result['strategy_name']} (ID: {result['strategy_id']})\n"
+            result_str += f"接收到 {result['position_count']} 条position数据\n\n"
+            result_str += "图表URL:\n"
+            result_str += f"- 访问地址: {nginx_url}\n\n"
+            result_str += "您可以通过上述URL在浏览器中访问回测结果图表\n"
+            return result_str
+
+        # 如果Nginx不可用，尝试使用内置Web服务器
+        logger.info("Nginx URL不可用，尝试使用内置Web服务器")
 
         # 启动Web服务器
         port = start_server()

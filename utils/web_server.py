@@ -282,61 +282,12 @@ def is_running_on_ec2():
     Returns:
         bool: 是否在EC2实例上运行
     """
-    # 首先检查环境变量，允许用户手动指定
-    env_ec2 = os.environ.get('EC2_INSTANCE')
-    if env_ec2 is not None:
-        if env_ec2.lower() == 'true':
-            logger.info("通过环境变量确认在EC2实例上运行")
-            return True
-        elif env_ec2.lower() == 'false':
-            logger.info("通过环境变量确认不在EC2实例上运行")
-            return False
-
-    # 方法1: 尝试访问EC2元数据服务
     try:
-        response = requests.get('http://169.254.169.254/latest/meta-data/instance-id', timeout=0.5)
-        if response.status_code == 200:
-            logger.info("通过元数据服务确认在EC2实例上运行")
-            return True
-    except Exception as e:
-        logger.debug(f"通过元数据服务检测EC2失败: {e}")
-
-    # 方法2: 检查系统文件
-    try:
-        if os.path.exists('/sys/hypervisor/uuid'):
-            with open('/sys/hypervisor/uuid', 'r') as f:
-                uuid = f.read().strip()
-                if uuid.startswith('ec2'):
-                    logger.info("通过hypervisor UUID确认在EC2实例上运行")
-                    return True
-    except Exception as e:
-        logger.debug(f"通过hypervisor UUID检测EC2失败: {e}")
-
-    # 方法3: 检查DMI信息
-    try:
-        if os.path.exists('/sys/devices/virtual/dmi/id/product_uuid'):
-            with open('/sys/devices/virtual/dmi/id/product_uuid', 'r') as f:
-                uuid = f.read().strip()
-                if uuid.startswith('EC2'):
-                    logger.info("通过DMI product UUID确认在EC2实例上运行")
-                    return True
-    except Exception as e:
-        logger.debug(f"通过DMI product UUID检测EC2失败: {e}")
-
-    # 方法4: 检查是否存在EC2特定文件
-    ec2_files = [
-        '/etc/ec2_version',
-        '/etc/amazon/ssm/seelog.xml',
-        '/var/lib/amazon',
-        '/var/log/amazon'
-    ]
-    for file_path in ec2_files:
-        if os.path.exists(file_path):
-            logger.info(f"通过EC2特定文件 {file_path} 确认在EC2实例上运行")
-            return True
-
-    logger.debug("未检测到在EC2实例上运行")
-    return False
+        # 尝试访问EC2元数据服务
+        response = requests.get('http://169.254.169.254/latest/meta-data/instance-id', timeout=0.1)
+        return response.status_code == 200
+    except:
+        return False
 
 def get_free_port(start_port=80, max_attempts=100, force_port=None):
     """
@@ -457,65 +408,6 @@ def can_use_privileged_port() -> bool:
     except OSError:
         return False
 
-def check_ec2_security_group() -> dict:
-    """
-    检查EC2安全组配置
-
-    Returns:
-        dict: 检查结果
-    """
-    result = {
-        "http_allowed": False,
-        "https_allowed": False,
-        "error": None
-    }
-
-    try:
-        # 尝试使用AWS CLI检查安全组配置
-        import subprocess
-
-        # 获取实例ID
-        try:
-            instance_id_cmd = "curl -s http://169.254.169.254/latest/meta-data/instance-id"
-            instance_id = subprocess.check_output(instance_id_cmd, shell=True, timeout=2).decode('utf-8').strip()
-            logger.info(f"获取到EC2实例ID: {instance_id}")
-
-            # 获取安全组ID
-            sg_cmd = f"aws ec2 describe-instances --instance-ids {instance_id} --query 'Reservations[0].Instances[0].SecurityGroups[*].GroupId' --output text"
-            security_groups = subprocess.check_output(sg_cmd, shell=True, timeout=5).decode('utf-8').strip().split()
-
-            if not security_groups:
-                result["error"] = "无法获取安全组信息"
-                return result
-
-            logger.info(f"获取到安全组: {security_groups}")
-
-            # 检查安全组规则
-            for sg_id in security_groups:
-                rules_cmd = f"aws ec2 describe-security-groups --group-ids {sg_id} --query 'SecurityGroups[0].IpPermissions[*]'"
-                rules_output = subprocess.check_output(rules_cmd, shell=True, timeout=5).decode('utf-8')
-
-                # 检查是否允许HTTP流量（端口80）
-                if '"FromPort": 80' in rules_output or '"ToPort": 80' in rules_output:
-                    result["http_allowed"] = True
-                    logger.info(f"安全组 {sg_id} 允许HTTP流量（端口80）")
-
-                # 检查是否允许HTTPS流量（端口443）
-                if '"FromPort": 443' in rules_output or '"ToPort": 443' in rules_output:
-                    result["https_allowed"] = True
-                    logger.info(f"安全组 {sg_id} 允许HTTPS流量（端口443）")
-        except subprocess.SubprocessError as e:
-            logger.error(f"执行AWS CLI命令失败: {e}")
-            result["error"] = f"执行AWS CLI命令失败: {e}"
-        except Exception as e:
-            logger.error(f"检查安全组时出错: {e}")
-            result["error"] = f"检查安全组时出错: {e}"
-    except ImportError:
-        logger.warning("无法导入subprocess模块，跳过安全组检查")
-        result["error"] = "无法导入subprocess模块，跳过安全组检查"
-
-    return result
-
 def diagnose_network() -> dict:
     """
     诊断网络连接状态
@@ -582,31 +474,8 @@ def diagnose_network() -> dict:
     if result["running_on_ec2"]:
         result["suggestions"].append("检测到在EC2实例上运行，已强制使用HTTP端口80")
 
-        # 检查EC2安全组配置
-        try:
-            sg_result = check_ec2_security_group()
-            result["ec2_security_group"] = sg_result
-
-            if sg_result.get("error"):
-                result["suggestions"].append(f"检查EC2安全组时出错: {sg_result['error']}")
-            else:
-                if not sg_result.get("http_allowed", False):
-                    result["suggestions"].append("EC2安全组未配置允许HTTP流量（端口80），请在AWS控制台中修改安全组设置，添加入站规则允许TCP端口80")
-
-                if _https_enabled and not sg_result.get("https_allowed", False):
-                    result["suggestions"].append(f"EC2安全组未配置允许HTTPS流量（端口{_https_port}），请在AWS控制台中修改安全组设置，添加入站规则允许TCP端口{_https_port}")
-        except Exception as e:
-            logger.error(f"检查EC2安全组时出错: {e}")
-            result["suggestions"].append(f"检查EC2安全组时出错: {e}")
-
         if not result.get("http_port_open_public", False):
-            result["suggestions"].append("EC2实例的HTTP端口80在公网不可访问，请检查以下可能的原因:")
-            result["suggestions"].append("1. EC2安全组设置：确保允许入站TCP端口80")
-            result["suggestions"].append("2. 网络ACL设置：确保允许入站TCP端口80")
-            result["suggestions"].append("3. 实例状态：确保实例正在运行且网络接口正常")
-            result["suggestions"].append("4. 公网IP：确保实例有公网IP或弹性IP")
-            result["suggestions"].append("5. 路由表：确保子网的路由表配置正确")
-            result["suggestions"].append("6. 服务器绑定：确保服务器绑定到0.0.0.0而不是localhost")
+            result["suggestions"].append("EC2实例的HTTP端口80在公网不可访问，请检查EC2安全组设置，确保允许入站TCP端口80")
 
         if _https_enabled and not result.get("https_port_open_public", False):
             result["suggestions"].append(f"EC2实例的HTTPS端口{_https_port}在公网不可访问，请检查EC2安全组设置，确保允许入站TCP端口{_https_port}")
@@ -720,44 +589,18 @@ def start_server(root_dir: str = "data/charts", host: str = "0.0.0.0", port: Opt
         socketserver.TCPServer.allow_reuse_address = True
 
         # 启动HTTP服务器
-        # 在EC2上，确保绑定到0.0.0.0，以便可以从外部访问
-        if on_ec2:
-            bind_host = "0.0.0.0"
-            logger.info(f"在EC2上运行，强制绑定到 {bind_host}:{port}")
-        else:
-            bind_host = host
-
         try:
-            # 尝试绑定到指定地址和端口
-            _server_instance = socketserver.TCPServer((bind_host, port), handler)
-            logger.info(f"HTTP服务器成功绑定到 {bind_host}:{port}")
+            _server_instance = socketserver.TCPServer((host, port), handler)
+            logger.info(f"HTTP服务器成功绑定到 {host}:{port}")
         except Exception as e:
-            logger.error(f"HTTP服务器绑定到 {bind_host}:{port} 失败: {e}")
-
-            # 如果不是在EC2上，尝试使用其他地址
-            if not on_ec2:
-                # 尝试绑定到0.0.0.0
-                try:
-                    logger.info("尝试绑定到0.0.0.0...")
-                    _server_instance = socketserver.TCPServer(("0.0.0.0", port), handler)
-                    logger.info(f"HTTP服务器成功绑定到 0.0.0.0:{port}")
-                except Exception as e2:
-                    logger.error(f"绑定到0.0.0.0失败: {e2}")
-
-                    # 最后尝试使用localhost
-                    try:
-                        logger.info("尝试绑定到localhost...")
-                        _server_instance = socketserver.TCPServer(("localhost", port), handler)
-                        logger.info(f"HTTP服务器成功绑定到 localhost:{port}")
-                    except Exception as e3:
-                        logger.error(f"绑定到localhost也失败: {e3}")
-                        return None
-            else:
-                # 在EC2上，如果绑定失败，这可能是权限问题或端口已被占用
-                logger.error("在EC2上绑定到0.0.0.0:80失败，请检查:")
-                logger.error("1. 是否有其他进程占用了端口80")
-                logger.error("2. 当前用户是否有权限绑定到端口80（通常需要root权限）")
-                logger.error("3. 是否已经有另一个服务器实例在运行")
+            logger.error(f"HTTP服务器绑定失败: {e}")
+            # 尝试使用localhost
+            try:
+                logger.info("尝试绑定到localhost...")
+                _server_instance = socketserver.TCPServer(("localhost", port), handler)
+                logger.info(f"HTTP服务器成功绑定到 localhost:{port}")
+            except Exception as e2:
+                logger.error(f"绑定到localhost也失败: {e2}")
                 return None
 
         # 在新线程中启动HTTP服务器
