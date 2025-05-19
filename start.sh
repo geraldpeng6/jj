@@ -226,6 +226,37 @@ main() {
     # 设置Nginx
     setup_nginx
 
+    # 测试HTML文件是否可访问
+    echo -e "${YELLOW}测试HTML文件是否可访问...${NC}"
+    TEST_URL=$(python -c "
+import sys
+sys.path.append('.')
+from utils.html_server import get_html_url
+import os
+test_path = os.path.abspath('data/charts/test.html')
+if os.path.exists(test_path):
+    url = get_html_url(test_path)
+    print(url)
+else:
+    print('测试文件不存在，正在创建...')
+    from utils.html_server import generate_test_html
+    url = generate_test_html()
+    print(url)
+")
+
+    if [ -n "$TEST_URL" ]; then
+        echo -e "${GREEN}测试HTML文件URL: $TEST_URL${NC}"
+        echo -e "${YELLOW}尝试使用curl访问测试HTML文件...${NC}"
+        curl -s -I "$TEST_URL" | head -n 1
+        if [ $? -eq 0 ]; then
+            echo -e "${GREEN}测试HTML文件可以成功访问!${NC}"
+        else
+            echo -e "${RED}无法访问测试HTML文件，请检查Nginx配置。${NC}"
+        fi
+    else
+        echo -e "${RED}无法获取测试HTML文件URL。${NC}"
+    fi
+
     # 根据传输协议选择不同的启动方式
     if [ "$TRANSPORT" == "stdio" ]; then
         echo -e "${GREEN}启动MCP服务器，使用STDIO传输协议${NC}"
