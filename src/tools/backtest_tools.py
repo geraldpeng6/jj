@@ -221,17 +221,27 @@ async def run_strategy_backtest_with_url(
         result_str += f"接收到 {result['position_count']} 条position数据\n\n"
         result_str += "图表URL:\n"
 
-        if urls.get("public"):
-            result_str += f"- 公网访问: {urls['public']}\n"
-        if urls.get("local") and urls.get("local") != urls.get("public"):
-            result_str += f"- 局域网访问: {urls['local']}\n"
-        result_str += f"- 本地访问: {urls['localhost']}\n\n"
+        # 添加HTTPS URL（如果有）
+        if urls.get("public_https"):
+            result_str += f"- 公网访问 (HTTPS): {urls['public_https']}\n"
+        if urls.get("local_https") and urls.get("local_https") != urls.get("public_https"):
+            result_str += f"- 局域网访问 (HTTPS): {urls['local_https']}\n"
+        if urls.get("localhost_https"):
+            result_str += f"- 本地访问 (HTTPS): {urls['localhost_https']}\n"
+
+        # 添加HTTP URL
+        if urls.get("public_http"):
+            result_str += f"- 公网访问 (HTTP): {urls['public_http']}\n"
+        if urls.get("local_http") and urls.get("local_http") != urls.get("public_http"):
+            result_str += f"- 局域网访问 (HTTP): {urls['local_http']}\n"
+        result_str += f"- 本地访问 (HTTP): {urls['localhost_http']}\n\n"
 
         result_str += "您可以通过上述URL在浏览器中访问回测结果图表\n"
         result_str += "注意: \n"
-        result_str += "1. 请确保使用HTTP协议（不是HTTPS）访问\n"
+        result_str += "1. 优先使用HTTPS URL，如果HTTPS不可用，再使用HTTP URL\n"
         result_str += "2. 如果Safari浏览器无法访问，请尝试使用Chrome或Firefox\n"
-        result_str += "3. 如果公网URL无法访问，请尝试使用局域网或本地URL"
+        result_str += "3. 如果公网URL无法访问，请尝试使用局域网或本地URL\n"
+        result_str += "4. 首次访问HTTPS URL时，浏览器可能会显示安全警告，这是因为使用了自签名证书，请选择继续访问"
 
         return result_str
 
