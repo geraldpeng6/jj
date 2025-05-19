@@ -52,8 +52,12 @@ def get_strategy_list(strategy_group: str = "user") -> Optional[List[Dict[str, A
     params = {"user_id": user_id}
     headers = get_headers()
 
+    # 如果响应使用压缩，可能会导致JSON解析错误，所以我们使用不压缩的请求
+    headers_no_compression = headers.copy()
+    headers_no_compression['Accept-Encoding'] = 'identity'  # 禁用压缩响应
+
     try:
-        response = requests.get(url, params=params, headers=headers)
+        response = requests.get(url, params=params, headers=headers_no_compression)
         response.raise_for_status()
         data = response.json()
 
@@ -120,8 +124,12 @@ def get_strategy_detail(strategy_id: str, strategy_group: str = "library") -> Op
     }
     headers = get_headers()
 
+    # 如果响应使用压缩，可能会导致JSON解析错误，所以我们使用不压缩的请求
+    headers_no_compression = headers.copy()
+    headers_no_compression['Accept-Encoding'] = 'identity'  # 禁用压缩响应
+
     try:
-        response = requests.get(url, params=params, headers=headers)
+        response = requests.get(url, params=params, headers=headers_no_compression)
         response.raise_for_status()
         data = response.json()
 
@@ -185,9 +193,13 @@ def delete_strategy(strategy_id: str) -> requests.Response:
         "strategy_id": strategy_id
     }
 
+    # 如果响应使用压缩，可能会导致JSON解析错误，所以我们使用不压缩的请求
+    headers_no_compression = headers.copy()
+    headers_no_compression['Accept-Encoding'] = 'identity'  # 禁用压缩响应
+
     try:
         # 使用DELETE请求
-        response = requests.delete(url, params=params, json=data, headers=headers)
+        response = requests.delete(url, params=params, json=data, headers=headers_no_compression)
         response.raise_for_status()
         result = response.json()
 
