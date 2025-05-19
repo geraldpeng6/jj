@@ -51,9 +51,19 @@ def get_strategy_list(strategy_group: str = "user") -> Optional[List[Dict[str, A
 
     params = {"user_id": user_id}
     headers = get_headers()
+    
+    # 设置代理为None
+    proxies = None
 
     try:
-        response = requests.get(url, params=params, headers=headers)
+        response = requests.get(
+            url,
+            params=params,
+            headers=headers,
+            proxies=proxies,
+            verify=True,
+            timeout=30  # 增加超时时间到30秒
+        )
         response.raise_for_status()
         data = response.json()
 
