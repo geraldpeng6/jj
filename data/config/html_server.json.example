@@ -1,0 +1,14 @@
+{
+    "server_host": null,
+    "server_port": 8081,
+    "charts_dir": "data/charts",
+    "use_ec2_metadata": true,
+    "use_public_ip": true,
+    "comments": {
+        "server_host": "服务器主机地址，null表示自动检测，也可以手动指定，例如'localhost'或'192.168.1.100'",
+        "server_port": "服务器端口，默认为8081",
+        "charts_dir": "图表目录，默认为'data/charts'",
+        "use_ec2_metadata": "是否使用EC2元数据服务获取公网IP，默认为true",
+        "use_public_ip": "是否使用公网IP服务获取公网IP，默认为true"
+    }
+}
