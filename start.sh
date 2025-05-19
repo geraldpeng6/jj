@@ -12,6 +12,7 @@ SERVER_MODE=false  # 默认不启用服务器模式
 SERVER_HOST=""     # 服务器主机地址，默认为空（自动检测）
 SERVER_PORT=80     # 服务器端口，默认为80
 NGINX_USER="www-data"  # Nginx用户，Ubuntu默认为www-data，CentOS默认为nginx
+DEBUG_MODE=false   # 默认不运行诊断测试
 
 # 颜色定义
 GREEN='\033[0;32m'
@@ -31,6 +32,7 @@ show_help() {
     echo "  -s, --server-mode         启用服务器模式"
     echo "  --server-host HOST        指定服务器主机地址 (默认: 自动检测)"
     echo "  --server-port PORT        指定服务器端口 (默认: 80)"
+    echo "  -d, --debug               运行诊断测试，检查Nginx配置和文件权限"
     echo ""
     echo "示例:"
     echo "  $0                        # 使用默认设置启动 (SSE, 0.0.0.0:8000)"
@@ -40,6 +42,7 @@ show_help() {
     echo "  $0 -n                     # 配置Nginx服务器并启动"
     echo "  $0 -s                     # 启用服务器模式并启动"
     echo "  $0 -n -s --server-host example.com --server-port 443  # 完整配置"
+    echo "  $0 -d                     # 运行诊断测试"
     exit 0
 }
 
@@ -76,6 +79,10 @@ while [[ $# -gt 0 ]]; do
         --server-port)
             SERVER_PORT="$2"
             shift 2
+            ;;
+        -d|--debug)
+            DEBUG_MODE=true
+            shift
             ;;
         *)
             echo -e "${RED}错误: 未知选项 $1${NC}"
@@ -217,6 +224,184 @@ EOF
     echo -e "${GREEN}服务器地址: http://$SERVER_HOST:$SERVER_PORT${NC}"
 }
 
+# 创建测试HTML文件
+create_test_html() {
+    echo -e "${YELLOW}创建测试HTML文件...${NC}"
+
+    # 确保charts目录存在
+    CHARTS_DIR="data/charts"
+    mkdir -p "$CHARTS_DIR"
+
+    # 创建测试HTML文件
+    TEST_HTML_FILE="$CHARTS_DIR/test_nginx.html"
+
+    # 获取当前时间
+    CURRENT_TIME=$(date "+%Y-%m-%d %H:%M:%S")
+
+    # 创建HTML文件
+    cat > "$TEST_HTML_FILE" << EOF
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nginx配置测试</title>
+    <style>
+        body {
+            font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+            color: #333;
+            text-align: center;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #2c3e50;
+        }
+        .success {
+            color: #27ae60;
+            font-weight: bold;
+        }
+        .info {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+            text-align: left;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Nginx配置测试</h1>
+        <p class="success">恭喜！Nginx配置成功！</p>
+        <p>如果您能看到这个页面，说明Nginx已经正确配置，并且可以提供HTML文件访问。</p>
+
+        <div class="info">
+            <p><strong>服务器信息：</strong></p>
+            <p>主机: $SERVER_HOST</p>
+            <p>端口: $SERVER_PORT</p>
+            <p>生成时间: $CURRENT_TIME</p>
+        </div>
+    </div>
+</body>
+</html>
+EOF
+
+    # 设置文件权限
+    chmod 644 "$TEST_HTML_FILE"
+
+    echo -e "${GREEN}测试HTML文件已创建: $TEST_HTML_FILE${NC}"
+    echo -e "${GREEN}测试URL: http://$SERVER_HOST:$SERVER_PORT/test_nginx.html${NC}"
+
+    # 返回测试URL
+    TEST_URL="http://$SERVER_HOST:$SERVER_PORT/test_nginx.html"
+    return 0
+}
+
+# 运行诊断测试
+run_diagnostics() {
+    echo -e "${YELLOW}运行诊断测试...${NC}"
+
+    # 检测服务器环境
+    detect_server
+
+    # 创建测试HTML文件
+    create_test_html
+
+    # 检查Nginx是否已安装
+    echo -e "${YELLOW}检查Nginx安装状态...${NC}"
+    if command -v nginx &> /dev/null; then
+        NGINX_VERSION=$(nginx -v 2>&1)
+        echo -e "${GREEN}Nginx已安装: $NGINX_VERSION${NC}"
+
+        # 检查Nginx配置
+        echo -e "${YELLOW}检查Nginx配置...${NC}"
+        if sudo nginx -t; then
+            echo -e "${GREEN}Nginx配置测试通过${NC}"
+        else
+            echo -e "${RED}Nginx配置测试失败${NC}"
+        fi
+
+        # 检查Nginx状态
+        echo -e "${YELLOW}检查Nginx运行状态...${NC}"
+        if systemctl is-active --quiet nginx; then
+            echo -e "${GREEN}Nginx正在运行${NC}"
+        else
+            echo -e "${RED}Nginx未运行${NC}"
+            echo -e "${YELLOW}尝试启动Nginx...${NC}"
+            sudo systemctl start nginx
+        fi
+
+        # 检查Nginx配置文件
+        echo -e "${YELLOW}检查Nginx配置文件...${NC}"
+        if [ -f "/etc/nginx/conf.d/quant_mcp.conf" ]; then
+            echo -e "${GREEN}找到Nginx配置文件: /etc/nginx/conf.d/quant_mcp.conf${NC}"
+            echo -e "${YELLOW}配置文件内容:${NC}"
+            sudo cat /etc/nginx/conf.d/quant_mcp.conf
+        else
+            echo -e "${RED}未找到Nginx配置文件: /etc/nginx/conf.d/quant_mcp.conf${NC}"
+        fi
+    else
+        echo -e "${RED}Nginx未安装${NC}"
+    fi
+
+    # 检查charts目录权限
+    CHARTS_DIR="data/charts"
+    echo -e "${YELLOW}检查charts目录权限...${NC}"
+    if [ -d "$CHARTS_DIR" ]; then
+        echo -e "${GREEN}charts目录存在: $CHARTS_DIR${NC}"
+
+        # 检查目录权限
+        CHARTS_PERMS=$(stat -c "%a %U:%G" "$CHARTS_DIR")
+        echo -e "${GREEN}charts目录权限: $CHARTS_PERMS${NC}"
+
+        # 检查测试HTML文件
+        if [ -f "$CHARTS_DIR/test_nginx.html" ]; then
+            TEST_PERMS=$(stat -c "%a %U:%G" "$CHARTS_DIR/test_nginx.html")
+            echo -e "${GREEN}测试HTML文件存在，权限: $TEST_PERMS${NC}"
+        else
+            echo -e "${RED}测试HTML文件不存在${NC}"
+        fi
+
+        # 建议修复权限
+        echo -e "${YELLOW}建议执行以下命令修复权限:${NC}"
+        echo -e "${YELLOW}sudo chown -R $NGINX_USER:$NGINX_USER $(pwd)/$CHARTS_DIR${NC}"
+        echo -e "${YELLOW}sudo chmod -R 755 $(pwd)/$CHARTS_DIR${NC}"
+    else
+        echo -e "${RED}charts目录不存在: $CHARTS_DIR${NC}"
+    fi
+
+    # 测试网络连接
+    echo -e "${YELLOW}测试网络连接...${NC}"
+    echo -e "${YELLOW}服务器地址: http://$SERVER_HOST:$SERVER_PORT${NC}"
+
+    # 使用curl测试
+    if command -v curl &> /dev/null; then
+        echo -e "${YELLOW}使用curl测试连接...${NC}"
+        curl -v "$TEST_URL"
+    else
+        echo -e "${RED}未安装curl，无法测试连接${NC}"
+    fi
+
+    echo -e "${GREEN}诊断测试完成${NC}"
+    echo -e "${YELLOW}如果测试失败，请检查以下几点:${NC}"
+    echo -e "${YELLOW}1. Nginx是否正确安装和配置${NC}"
+    echo -e "${YELLOW}2. charts目录权限是否正确${NC}"
+    echo -e "${YELLOW}3. 防火墙是否允许80端口访问${NC}"
+    echo -e "${YELLOW}4. 安全组是否允许80端口访问${NC}"
+
+    exit 0
+}
+
 # 配置Nginx
 setup_nginx() {
     echo -e "${YELLOW}配置Nginx...${NC}"
@@ -306,6 +491,27 @@ EOF
                 echo -e "${YELLOW}重启Nginx...${NC}"
                 if sudo systemctl restart nginx; then
                     echo -e "${GREEN}Nginx已重启${NC}"
+
+                    # 创建测试HTML文件
+                    create_test_html
+
+                    # 测试Nginx是否能正确提供HTML文件
+                    echo -e "${YELLOW}测试Nginx是否能正确提供HTML文件...${NC}"
+                    echo -e "${YELLOW}请访问以下URL测试Nginx配置:${NC}"
+                    echo -e "${GREEN}$TEST_URL${NC}"
+
+                    # 尝试使用curl测试
+                    if command -v curl &> /dev/null; then
+                        echo -e "${YELLOW}使用curl测试Nginx...${NC}"
+                        if curl -s --head "$TEST_URL" | grep "200 OK" > /dev/null; then
+                            echo -e "${GREEN}Nginx测试成功! 可以通过浏览器访问 $TEST_URL${NC}"
+                        else
+                            echo -e "${RED}Nginx测试失败! 请检查配置和防火墙设置${NC}"
+                            echo -e "${YELLOW}手动测试: curl -v $TEST_URL${NC}"
+                        fi
+                    else
+                        echo -e "${YELLOW}未安装curl，无法自动测试。请手动在浏览器中访问测试URL${NC}"
+                    fi
                 else
                     echo -e "${RED}Nginx重启失败${NC}"
                     return 1
@@ -335,6 +541,12 @@ EOF
 
 # 主函数
 main() {
+    # 如果是诊断模式，直接运行诊断
+    if [ "$DEBUG_MODE" = true ]; then
+        run_diagnostics
+        exit 0
+    fi
+
     echo -e "${YELLOW}准备启动MCP服务器，使用 $TRANSPORT 传输协议...${NC}"
 
     # 设置环境
@@ -380,7 +592,19 @@ main() {
 
     # 如果启用了服务器模式，显示访问信息
     if [ "$SERVER_MODE" = true ]; then
+        # 如果没有配置Nginx，创建测试HTML文件
+        if [ "$SETUP_NGINX" != true ]; then
+            create_test_html
+        fi
+
         echo -e "${GREEN}HTML文件可通过以下地址访问: http://$SERVER_HOST:$SERVER_PORT/文件名.html${NC}"
+        echo -e "${GREEN}测试URL: http://$SERVER_HOST:$SERVER_PORT/test_nginx.html${NC}"
+
+        # 提示用户检查文件权限
+        echo -e "${YELLOW}如果无法访问HTML文件，请检查文件权限和Nginx配置${NC}"
+        echo -e "${YELLOW}可能需要执行以下命令:${NC}"
+        echo -e "${YELLOW}sudo chown -R $NGINX_USER:$NGINX_USER $(pwd)/data/charts${NC}"
+        echo -e "${YELLOW}sudo chmod -R 755 $(pwd)/data/charts${NC}"
     fi
 }
 
