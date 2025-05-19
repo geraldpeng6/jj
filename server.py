@@ -9,6 +9,7 @@ MCP服务器入口
 import sys
 import logging
 import os
+import inspect
 from mcp.server.fastmcp import FastMCP
 
 from utils.logging_utils import setup_logging
@@ -41,12 +42,14 @@ def create_server(name: str = "量化交易助手") -> FastMCP:
 
     return mcp
 
-def run_server(transport: str = 'stdio'):
+def run_server(transport: str = 'stdio', host: str = '0.0.0.0', port: int = 8000):
     """
     运行MCP服务器
 
     Args:
-        transport: 传输协议，默认为stdio
+        transport: 传输协议，默认为stdio，支持 'stdio', 'sse', 'streamable-http'
+        host: 主机地址，当使用 'sse' 或 'streamable-http' 传输协议时有效
+        port: 端口号，当使用 'sse' 或 'streamable-http' 传输协议时有效
     """
     try:
         # 确保必要的目录存在
@@ -69,17 +72,64 @@ def run_server(transport: str = 'stdio'):
         # 启动服务器
         logger.info(f"启动MCP服务器，使用 {transport} 传输协议")
         print(f"启动量化交易助手MCP服务器，使用 {transport} 传输协议")
-        mcp.run(transport=transport)
+
+        # 根据传输协议选择不同的启动方式
+        if transport == 'stdio':
+            mcp.run(transport=transport)
+        elif transport == 'sse':
+            print(f"SSE服务器将在 http://{host}:{port}/sse 上运行")
+            logger.info(f"SSE服务器将在 http://{host}:{port}/sse 上运行")
+
+            # 检查MCP版本，不同版本的API可能不同
+            run_params = inspect.signature(mcp.run).parameters
+
+            if 'host' in run_params and 'port' in run_params:
+                # 新版本API
+                mcp.run(transport=transport, host=host, port=port)
+            else:
+                # 旧版本API，需要设置环境变量
+                os.environ['MCP_SSE_HOST'] = host
+                os.environ['MCP_SSE_PORT'] = str(port)
+                mcp.run(transport=transport)
+
+        elif transport == 'streamable-http':
+            print(f"Streamable HTTP服务器将在 http://{host}:{port}/mcp 上运行")
+            logger.info(f"Streamable HTTP服务器将在 http://{host}:{port}/mcp 上运行")
+
+            # 检查MCP版本，不同版本的API可能不同
+            run_params = inspect.signature(mcp.run).parameters
+
+            if 'host' in run_params and 'port' in run_params and 'path' in run_params:
+                # 新版本API
+                mcp.run(transport=transport, host=host, port=port, path='/mcp')
+            else:
+                # 旧版本API，需要设置环境变量
+                os.environ['MCP_HTTP_HOST'] = host
+                os.environ['MCP_HTTP_PORT'] = str(port)
+                os.environ['MCP_HTTP_PATH'] = '/mcp'
+                mcp.run(transport=transport)
+        else:
+            raise ValueError(f"不支持的传输协议: {transport}")
     except Exception as e:
         logger.error(f"启动MCP服务器失败: {e}")
         print(f"错误: 启动MCP服务器失败: {e}", file=sys.stderr)
         sys.exit(1)
 
 if __name__ == "__main__":
-    # 从命令行参数获取传输协议
-    transport = 'stdio'
-    if len(sys.argv) > 1:
-        transport = sys.argv[1]
+    import argparse
+
+    # 创建命令行参数解析器
+    parser = argparse.ArgumentParser(description='启动MCP服务器')
+    parser.add_argument('--transport', '-t', type=str, default='stdio',
+                        choices=['stdio', 'sse', 'streamable-http'],
+                        help='传输协议 (stdio, sse, streamable-http)')
+    parser.add_argument('--host', '-H', type=str, default='0.0.0.0',
+                        help='主机地址，当使用 sse 或 streamable-http 传输协议时有效')
+    parser.add_argument('--port', '-p', type=int, default=8000,
+                        help='端口号，当使用 sse 或 streamable-http 传输协议时有效')
+
+    # 解析命令行参数
+    args = parser.parse_args()
 
     # 运行服务器
-    run_server(transport)
+    run_server(transport=args.transport, host=args.host, port=args.port)
