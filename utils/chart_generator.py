@@ -291,7 +291,7 @@ def calculate_stats(df: pd.DataFrame) -> Dict[str, Any]:
     }
 
 
-def open_in_browser(file_path: str, use_web_server: bool = True) -> bool:
+def open_in_browser(file_path: str, use_web_server: bool = True) -> Optional[str]:
     """
     在浏览器中打开HTML文件，或者获取文件URL
 
@@ -300,12 +300,12 @@ def open_in_browser(file_path: str, use_web_server: bool = True) -> bool:
         use_web_server: 是否使用Web服务器，默认为True
 
     Returns:
-        bool: 是否成功获取URL
+        Optional[str]: 文件URL，如果获取失败则返回None
     """
     try:
         if not os.path.exists(file_path):
             logger.error(f"文件不存在: {file_path}")
-            return False
+            return None
 
         # 获取文件的绝对路径
         abs_path = os.path.abspath(file_path)
@@ -316,7 +316,7 @@ def open_in_browser(file_path: str, use_web_server: bool = True) -> bool:
             file_url = get_chart_url(file_path)
             if file_url:
                 logger.info(f"已通过Nginx获取文件URL: {file_url}")
-                return True
+                return file_url
 
             # 如果Nginx不可用，尝试启动内置Web服务器
             port = start_server()
@@ -326,20 +326,20 @@ def open_in_browser(file_path: str, use_web_server: bool = True) -> bool:
                 if file_url:
                     # 不自动打开浏览器，只记录URL
                     logger.info(f"已通过内置Web服务器获取文件URL: {file_url}")
-                    return True
+                    return file_url
                 else:
                     logger.warning(f"无法获取文件URL")
-                    return False
+                    return None
             else:
                 logger.warning(f"启动Web服务器失败")
-                return False
+                return None
 
-        # 如果不使用Web服务器，也不自动打开本地文件
-        logger.info(f"未使用Web服务器，不打开本地文件")
-        return False
+        # 如果不使用Web服务器，返回本地文件路径
+        logger.info(f"未使用Web服务器，返回本地文件路径")
+        return f"file://{abs_path}"
     except Exception as e:
         logger.error(f"获取文件URL时发生错误: {e}")
-        return False
+        return None
 
 
 def load_backtest_data(file_path: str) -> List[Dict[str, Any]]:
