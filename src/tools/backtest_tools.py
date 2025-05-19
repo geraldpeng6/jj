@@ -14,7 +14,7 @@ from mcp.server.fastmcp import FastMCP
 
 from utils.backtest_utils import run_backtest, format_choose_stock
 from utils.chart_generator import open_in_browser
-from utils.web_server import start_server, get_file_url
+from utils.web_server import start_server, get_file_url, get_all_urls
 
 # 获取日志记录器
 logger = logging.getLogger('quant_mcp.backtest_tools')
@@ -208,6 +208,9 @@ async def run_strategy_backtest_with_url(
             # 如果获取URL失败，返回错误信息
             return f"回测成功完成！\n\n策略: {result['strategy_name']} (ID: {result['strategy_id']})\n接收到 {result['position_count']} 条position数据\n\n注意：获取图表URL失败，无法提供网址访问"
 
+        # 获取所有可能的URL
+        urls = get_all_urls(chart_path)
+
         # 格式化输出
         if stock_info and not stock_info.startswith("def choose_stock"):
             result_str = f"使用股票 {stock_info} 回测成功完成！\n\n"
@@ -216,8 +219,19 @@ async def run_strategy_backtest_with_url(
 
         result_str += f"策略: {result['strategy_name']} (ID: {result['strategy_id']})\n"
         result_str += f"接收到 {result['position_count']} 条position数据\n\n"
-        result_str += f"图表URL: {chart_url}\n\n"
-        result_str += "您可以通过上述URL在浏览器中访问回测结果图表"
+        result_str += "图表URL:\n"
+
+        if urls.get("public"):
+            result_str += f"- 公网访问: {urls['public']}\n"
+        if urls.get("local") and urls.get("local") != urls.get("public"):
+            result_str += f"- 局域网访问: {urls['local']}\n"
+        result_str += f"- 本地访问: {urls['localhost']}\n\n"
+
+        result_str += "您可以通过上述URL在浏览器中访问回测结果图表\n"
+        result_str += "注意: \n"
+        result_str += "1. 请确保使用HTTP协议（不是HTTPS）访问\n"
+        result_str += "2. 如果Safari浏览器无法访问，请尝试使用Chrome或Firefox\n"
+        result_str += "3. 如果公网URL无法访问，请尝试使用局域网或本地URL"
 
         return result_str
 

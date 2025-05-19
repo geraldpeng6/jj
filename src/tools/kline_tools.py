@@ -14,7 +14,7 @@ from mcp.server.fastmcp import FastMCP
 
 from utils.chart_generator import generate_html, open_in_browser
 from utils.kline_utils import fetch_and_save_kline
-from utils.web_server import start_server, get_file_url
+from utils.web_server import start_server, get_file_url, get_all_urls
 
 # 获取日志记录器
 logger = logging.getLogger('quant_mcp.kline_tools')
@@ -188,10 +188,24 @@ async def get_kline_data_with_url(
             # 如果获取URL失败，返回错误信息
             return f"成功获取 {symbol} 的K线数据，共 {len(df)} 条记录\n\n注意：获取图表URL失败，无法提供网址访问"
 
+        # 获取所有可能的URL
+        urls = get_all_urls(chart_file)
+
         # 格式化输出
         result_str = f"成功获取 {symbol} 的K线数据，共 {len(df)} 条记录\n\n"
-        result_str += f"图表URL: {chart_url}\n\n"
-        result_str += "您可以通过上述URL在浏览器中访问K线图表"
+        result_str += "图表URL:\n"
+
+        if urls.get("public"):
+            result_str += f"- 公网访问: {urls['public']}\n"
+        if urls.get("local") and urls.get("local") != urls.get("public"):
+            result_str += f"- 局域网访问: {urls['local']}\n"
+        result_str += f"- 本地访问: {urls['localhost']}\n\n"
+
+        result_str += "您可以通过上述URL在浏览器中访问K线图表\n"
+        result_str += "注意: \n"
+        result_str += "1. 请确保使用HTTP协议（不是HTTPS）访问\n"
+        result_str += "2. 如果Safari浏览器无法访问，请尝试使用Chrome或Firefox\n"
+        result_str += "3. 如果公网URL无法访问，请尝试使用局域网或本地URL"
 
         return result_str
 
