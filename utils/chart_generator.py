@@ -19,6 +19,16 @@ from datetime import datetime as dt
 from typing import Optional, Dict, List, Any, Tuple, Union
 from jinja2 import Template
 
+# 导入web服务器模块
+try:
+    from utils.web_server import start_server, get_file_url
+except ImportError:
+    # 如果导入失败，提供空函数
+    def start_server(*args, **kwargs):
+        return None
+    def get_file_url(*args, **kwargs):
+        return None
+
 # 获取日志记录器
 logger = logging.getLogger('quant_mcp.chart_generator')
 
@@ -57,8 +67,9 @@ def generate_html(
         # 确保输出目录存在
         os.makedirs(output_dir, exist_ok=True)
 
-        # 生成文件名
-        file_name = f"{symbol}_{exchange}_{resolution}_{fq}.html"
+        # 生成文件名，添加时间戳避免冲突
+        timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+        file_name = f"{symbol}_{exchange}_{resolution}_{fq}_{timestamp}.html"
         file_path = os.path.join(output_dir, file_name)
 
         # 准备数据
@@ -127,7 +138,7 @@ def generate_html(
 
         # 获取绝对路径
         abs_file_path = os.path.abspath(file_path)
-        logger.info(f"K线图表已生成: {abs_file_path}")
+        logger.info(f"K线图表已生成")
 
         return abs_file_path
     except Exception as e:
@@ -272,31 +283,48 @@ def calculate_stats(df: pd.DataFrame) -> Dict[str, Any]:
     }
 
 
-def open_in_browser(file_path: str) -> bool:
+def open_in_browser(file_path: str, use_web_server: bool = True) -> bool:
     """
-    在浏览器中打开HTML文件
+    在浏览器中打开HTML文件，或者获取文件URL
 
     Args:
         file_path: HTML文件路径
+        use_web_server: 是否使用Web服务器，默认为True
 
     Returns:
-        bool: 是否成功打开
+        bool: 是否成功获取URL
     """
     try:
-        if os.path.exists(file_path):
-            # 获取文件的绝对路径
-            abs_path = os.path.abspath(file_path)
-            # 转换为URL格式
-            file_url = f"file://{abs_path}"
-            # 在浏览器中打开
-            webbrowser.open(file_url)
-            logger.info(f"已在浏览器中打开: {file_url}")
-            return True
-        else:
+        if not os.path.exists(file_path):
             logger.error(f"文件不存在: {file_path}")
             return False
+
+        # 获取文件的绝对路径
+        abs_path = os.path.abspath(file_path)
+
+        # 如果使用Web服务器
+        if use_web_server:
+            # 尝试启动Web服务器
+            port = start_server()
+            if port is not None:
+                # 获取文件URL
+                file_url = get_file_url(file_path)
+                if file_url:
+                    # 不自动打开浏览器，只记录URL
+                    logger.info(f"已获取文件URL")
+                    return True
+                else:
+                    logger.warning(f"无法获取文件URL")
+                    return False
+            else:
+                logger.warning(f"启动Web服务器失败")
+                return False
+
+        # 如果不使用Web服务器，也不自动打开本地文件
+        logger.info(f"未使用Web服务器，不打开本地文件")
+        return False
     except Exception as e:
-        logger.error(f"在浏览器中打开文件时发生错误: {e}")
+        logger.error(f"获取文件URL时发生错误: {e}")
         return False
 
 
@@ -1174,7 +1202,7 @@ def generate_backtest_html(
 
         # 获取绝对路径
         abs_file_path = os.path.abspath(file_path)
-        logger.info(f"回测结果图表已生成: {abs_file_path}")
+        logger.info(f"回测结果图表已生成")
 
         return abs_file_path
     except Exception as e:

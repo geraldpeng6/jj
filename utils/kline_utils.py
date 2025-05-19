@@ -170,7 +170,7 @@ def fetch_and_save_kline(
 
                     # 获取绝对路径
                     abs_file_path = os.path.abspath(file_path)
-                    logger.info(f"成功保存K线数据到文件: {abs_file_path}，共 {len(df)} 条记录")
+                    logger.info(f"成功保存K线数据到文件，共 {len(df)} 条记录")
                     return True, df, abs_file_path
                 except Exception as e:
                     logger.error(f"保存K线数据时发生错误: {e}")
