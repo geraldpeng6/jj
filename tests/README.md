@@ -76,6 +76,21 @@ python tests/test_strategy_api_full.py --type both --format json --output result
 - `--format`, `-f`: 输出格式，可选值为 `log`（日志输出）或 `json`（JSON输出）
 - `--output`, `-o`: 输出文件路径，仅当 `format` 为 `json` 时有效
 
+### 4. 简单测试脚本 (test_strategy_api_simple.py)
+
+这个脚本是一个简化版的测试脚本，专门用于测试策略库列表API，并处理可能的压缩响应。如果您在使用其他测试脚本时遇到了响应解析问题，可以尝试使用这个脚本。
+
+**使用方法：**
+```bash
+python tests/test_strategy_api_simple.py
+```
+
+**功能：**
+- 向策略库列表API发送请求，并禁用响应压缩
+- 自动检测并处理可能的gzip压缩响应
+- 尝试使用多种编码解析响应内容
+- 提供详细的错误诊断信息
+
 ## 日志文件
 
 所有测试脚本都会生成详细的日志文件，包含请求和响应的完整信息。日志文件保存在 `data/logs` 目录下，文件名包含测试类型和时间戳。

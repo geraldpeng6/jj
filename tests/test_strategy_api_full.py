@@ -21,6 +21,8 @@ import requests
 import argparse
 import datetime
 import time
+import gzip
+import io
 from typing import Dict, Optional, Any, Tuple, List, Union
 
 # 添加项目根目录到Python路径
@@ -33,25 +35,25 @@ from utils.auth_utils import load_auth_config, get_auth_info, get_headers
 def setup_logging(log_file: str = None, log_level: int = logging.DEBUG) -> logging.Logger:
     """
     设置日志记录器
-    
+
     Args:
         log_file: 日志文件路径，如果为None则输出到控制台
         log_level: 日志级别
-        
+
     Returns:
         logging.Logger: 日志记录器
     """
     # 创建日志记录器
     logger = logging.getLogger('strategy_api_test')
     logger.setLevel(log_level)
-    
+
     # 清除现有的处理器
     for handler in logger.handlers[:]:
         logger.removeHandler(handler)
-    
+
     # 创建格式化器
     formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    
+
     # 创建处理器
     if log_file:
         # 确保日志目录存在
@@ -61,32 +63,32 @@ def setup_logging(log_file: str = None, log_level: int = logging.DEBUG) -> loggi
         file_handler.setLevel(log_level)
         file_handler.setFormatter(formatter)
         logger.addHandler(file_handler)
-    
+
     # 控制台处理器
     console_handler = logging.StreamHandler()
     console_handler.setLevel(logging.INFO)
     console_handler.setFormatter(formatter)
     logger.addHandler(console_handler)
-    
+
     return logger
 
 def test_strategy_list_api(
-    strategy_group: str = "library", 
+    strategy_group: str = "library",
     base_url: str = "https://api.yueniusz.com",
     output_format: str = "log",
     log_file: str = None
 ) -> Union[bool, Dict[str, Any]]:
     """
     测试获取策略列表的API功能
-    
+
     Args:
         strategy_group: 策略组类型，"user"表示用户策略，"library"表示策略库策略
         base_url: API基础URL
         output_format: 输出格式，"log"表示日志输出，"json"表示返回JSON数据
         log_file: 日志文件路径，如果为None则自动生成
-        
+
     Returns:
-        Union[bool, Dict[str, Any]]: 
+        Union[bool, Dict[str, Any]]:
             - 当output_format为"log"时，返回测试是否成功
             - 当output_format为"json"时，返回API响应数据
     """
@@ -94,25 +96,25 @@ def test_strategy_list_api(
     if log_file is None:
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         log_file = f"data/logs/strategy_{strategy_group}_list_api_test_{timestamp}.log"
-    
+
     # 设置日志
     logger = setup_logging(log_file)
     logger.info(f"开始测试{'策略库' if strategy_group == 'library' else '用户策略'}列表API")
-    
+
     # 加载认证配置
     logger.info("加载认证配置")
     if not load_auth_config():
         logger.error("错误: 无法加载认证配置，请确保 data/config/auth.json 文件存在且包含有效的token和user_id")
         return False if output_format == "log" else {"error": "无法加载认证配置"}
-    
+
     # 获取认证信息
     token, user_id = get_auth_info()
     if not token or not user_id:
         logger.error("错误: 无法获取认证信息")
         return False if output_format == "log" else {"error": "无法获取认证信息"}
-    
+
     logger.info(f"成功获取认证信息，用户ID: {user_id}")
-    
+
     # 根据策略组类型选择不同的URL
     if strategy_group == "library":
         url = f"{base_url}/trader-service/strategy/strategy-library-list"
@@ -120,21 +122,24 @@ def test_strategy_list_api(
     else:
         url = f"{base_url}/trader-service/strategy/user-strategy-list"
         log_prefix = "用户策略"
-    
+
     logger.info(f"API URL: {url}")
-    
+
     # 构建请求参数
     params = {"user_id": user_id}
     logger.info(f"请求参数: {params}")
-    
+
     # 获取请求头
     headers = get_headers()
+    # 修改请求头，确保不使用压缩
+    headers['Accept-Encoding'] = 'identity'
+
     # 记录请求头（移除敏感信息）
     safe_headers = headers.copy()
     if 'Authorization' in safe_headers:
         safe_headers['Authorization'] = 'Bearer ***'  # 隐藏实际token
     logger.info(f"请求头: {json.dumps(safe_headers, ensure_ascii=False, indent=2)}")
-    
+
     try:
         # 发送API请求
         logger.info("发送API请求...")
@@ -147,73 +152,122 @@ def test_strategy_list_api(
             timeout=30  # 增加超时时间到30秒
         )
         end_time = time.time()
-        
+
         # 记录请求信息
         logger.info(f"请求方法: GET")
         logger.info(f"请求URL: {response.request.url}")
         logger.info(f"请求耗时: {end_time - start_time:.2f}秒")
-        
+
         # 尝试解析响应
         try:
             response.raise_for_status()  # 检查HTTP错误
-            data = response.json()
-            
-            # 记录响应状态和内容
-            logger.info(f"响应状态码: {response.status_code}")
-            logger.info(f"响应内容: {json.dumps(data, ensure_ascii=False, indent=2)}")
-            
-            # 检查响应是否成功
-            if data.get('code') == 1 and data.get('msg') == 'ok':
-                strategy_list = data.get('data', {}).get('strategy_list', [])
-                logger.info(f"获取{log_prefix}列表成功，共 {len(strategy_list)} 个策略")
-                
-                # 记录策略列表的基本信息
-                for i, strategy in enumerate(strategy_list, 1):
-                    logger.info(f"策略 {i}:")
-                    logger.info(f"  ID: {strategy.get('strategy_id', '无ID')}")
-                    logger.info(f"  名称: {strategy.get('strategy_name', '未命名策略')}")
-                    
-                    # 检查策略描述的格式
-                    strategy_desc = strategy.get('strategy_desc')
-                    if strategy_desc:
-                        if isinstance(strategy_desc, list):
-                            logger.info(f"  描述: {', '.join(strategy_desc)}")
-                        else:
-                            logger.info(f"  描述: {strategy_desc}")
-                    
-                    # 检查策略描述URL
-                    strategy_desc_url = strategy.get('strategy_desc_url')
-                    if strategy_desc_url:
-                        logger.info(f"  描述URL: {strategy_desc_url}")
-                
-                logger.info("测试成功完成")
-                
-                if output_format == "log":
-                    return True
+
+            # 检查响应内容类型
+            content_type = response.headers.get('Content-Type', '')
+            content_encoding = response.headers.get('Content-Encoding', '')
+
+            logger.info(f"响应内容类型: {content_type}")
+            logger.info(f"响应内容编码: {content_encoding}")
+
+            # 处理可能的压缩响应
+            content = response.content
+            if content_encoding.lower() == 'gzip' or (len(content) > 2 and content[:2] == b'\x1f\x8b'):
+                try:
+                    # 尝试解压gzip内容
+                    logger.info("检测到gzip压缩响应，尝试解压...")
+                    content = gzip.decompress(content)
+                    logger.info("gzip解压成功")
+                except Exception as e:
+                    logger.warning(f"gzip解压失败: {e}，将使用原始内容")
+
+            # 尝试解析JSON
+            try:
+                if isinstance(content, bytes):
+                    data = json.loads(content.decode('utf-8'))
                 else:
-                    return data
-            else:
-                logger.error(f"获取{log_prefix}列表失败，错误码: {data.get('code')}, 错误信息: {data.get('msg')}")
-                
+                    data = response.json()
+
+                # 记录响应状态和内容
+                logger.info(f"响应状态码: {response.status_code}")
+                logger.info(f"响应内容: {json.dumps(data, ensure_ascii=False, indent=2)}")
+
+                # 检查响应是否成功
+                if data.get('code') == 1 and data.get('msg') == 'ok':
+                    strategy_list = data.get('data', {}).get('strategy_list', [])
+                    logger.info(f"获取{log_prefix}列表成功，共 {len(strategy_list)} 个策略")
+
+                    # 记录策略列表的基本信息
+                    for i, strategy in enumerate(strategy_list, 1):
+                        logger.info(f"策略 {i}:")
+                        logger.info(f"  ID: {strategy.get('strategy_id', '无ID')}")
+                        logger.info(f"  名称: {strategy.get('strategy_name', '未命名策略')}")
+
+                        # 检查策略描述的格式
+                        strategy_desc = strategy.get('strategy_desc')
+                        if strategy_desc:
+                            if isinstance(strategy_desc, list):
+                                logger.info(f"  描述: {', '.join(strategy_desc)}")
+                            else:
+                                logger.info(f"  描述: {strategy_desc}")
+
+                        # 检查策略描述URL
+                        strategy_desc_url = strategy.get('strategy_desc_url')
+                        if strategy_desc_url:
+                            logger.info(f"  描述URL: {strategy_desc_url}")
+
+                    logger.info("测试成功完成")
+
+                    if output_format == "log":
+                        return True
+                    else:
+                        return data
+                else:
+                    logger.error(f"获取{log_prefix}列表失败，错误码: {data.get('code')}, 错误信息: {data.get('msg')}")
+
+                    if output_format == "log":
+                        return False
+                    else:
+                        return {"error": f"获取{log_prefix}列表失败", "data": data}
+            except ValueError as e:
+                # JSON解析错误
+                logger.error(f"解析JSON内容失败: {e}")
+
+                # 记录原始内容的前100个字节（十六进制格式）
+                if isinstance(content, bytes):
+                    hex_content = content[:100].hex()
+                    logger.error(f"原始内容前100字节(十六进制): {hex_content}")
+
+                    # 尝试以不同编码解码
+                    for encoding in ['utf-8', 'latin1', 'cp1252', 'gbk']:
+                        try:
+                            decoded = content.decode(encoding)
+                            logger.info(f"使用{encoding}解码成功，前1000个字符: {decoded[:1000]}")
+                            break
+                        except UnicodeDecodeError:
+                            logger.info(f"使用{encoding}解码失败")
+                else:
+                    logger.error(f"原始响应内容: {response.text[:1000]}...")  # 只记录前1000个字符
+
                 if output_format == "log":
                     return False
                 else:
-                    return {"error": f"获取{log_prefix}列表失败", "data": data}
-                
-        except ValueError as e:
-            # JSON解析错误
-            logger.error(f"解析响应内容失败: {e}")
-            logger.error(f"原始响应内容: {response.text[:1000]}...")  # 只记录前1000个字符
-            
-            if output_format == "log":
-                return False
-            else:
-                return {"error": f"解析响应内容失败: {e}", "raw_response": response.text[:1000]}
-            
+                    error_info = {
+                        "error": f"解析JSON内容失败: {e}",
+                        "content_type": content_type,
+                        "content_encoding": content_encoding
+                    }
+
+                    if isinstance(content, bytes):
+                        error_info["raw_bytes_hex"] = content[:100].hex()
+                    else:
+                        error_info["raw_response"] = response.text[:1000]
+
+                    return error_info
+
     except requests.exceptions.RequestException as e:
         # 请求异常
         logger.error(f"请求异常: {e}")
-        
+
         if output_format == "log":
             return False
         else:
@@ -221,7 +275,7 @@ def test_strategy_list_api(
     except Exception as e:
         # 其他异常
         logger.error(f"发生未预期的异常: {e}")
-        
+
         if output_format == "log":
             return False
         else:
@@ -241,19 +295,19 @@ def main():
                         help='输出格式 (log, json)')
     parser.add_argument('--output', '-o', type=str, default=None,
                         help='输出文件路径，仅当format为json时有效')
-    
+
     # 解析命令行参数
     args = parser.parse_args()
-    
+
     # 确保必要的目录存在
     os.makedirs('data/logs', exist_ok=True)
     os.makedirs('data/config', exist_ok=True)
-    
+
     # 检查配置文件
     if not os.path.exists('data/config/auth.json'):
         print("错误: 认证配置文件不存在，请复制 data/config/auth.json.example 并填写认证信息")
         return
-    
+
     # 根据参数执行测试
     if args.type == 'both':
         # 测试两种类型
@@ -263,7 +317,7 @@ def main():
                 'library': test_strategy_list_api('library', args.url, 'json'),
                 'user': test_strategy_list_api('user', args.url, 'json')
             }
-            
+
             # 输出结果
             if args.output:
                 with open(args.output, 'w', encoding='utf-8') as f:
@@ -275,7 +329,7 @@ def main():
             # 日志输出
             library_success = test_strategy_list_api('library', args.url)
             user_success = test_strategy_list_api('user', args.url)
-            
+
             if library_success and user_success:
                 print("所有测试成功完成，请查看日志文件获取详细信息")
             else:
@@ -285,7 +339,7 @@ def main():
         if args.format == 'json':
             # JSON输出
             result = test_strategy_list_api(args.type, args.url, 'json')
-            
+
             # 输出结果
             if args.output:
                 with open(args.output, 'w', encoding='utf-8') as f:
@@ -296,7 +350,7 @@ def main():
         else:
             # 日志输出
             success = test_strategy_list_api(args.type, args.url)
-            
+
             if success:
                 print("测试成功完成，请查看日志文件获取详细信息")
             else:
