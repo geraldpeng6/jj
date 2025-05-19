@@ -1,0 +1,8 @@
+{
+  "enabled": true,
+  "host": "54.236.201.167",
+  "port": 80,
+  "base_url": "",
+  "charts_dir": "data/charts",
+  "use_https": false
+}

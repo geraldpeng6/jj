@@ -19,6 +19,8 @@ from datetime import datetime as dt
 from typing import Optional, Dict, List, Any, Tuple, Union
 from jinja2 import Template
 
+from utils.html_server import get_html_url, is_running_on_server
+
 # 获取日志记录器
 logger = logging.getLogger('quant_mcp.chart_generator')
 
@@ -125,11 +127,12 @@ def generate_html(
         with open(file_path, 'w', encoding='utf-8') as f:
             f.write(html_content)
 
-        # 获取绝对路径
-        abs_file_path = os.path.abspath(file_path)
-        logger.info(f"K线图表已生成: {abs_file_path}")
+        # 获取HTML文件URL
+        html_url = get_html_url(file_path)
+        logger.info(f"K线图表已生成: {file_path}")
+        logger.info(f"K线图表URL: {html_url}")
 
-        return abs_file_path
+        return html_url
     except Exception as e:
         logger.error(f"生成K线图表时发生错误: {e}")
         return None
@@ -272,29 +275,38 @@ def calculate_stats(df: pd.DataFrame) -> Dict[str, Any]:
     }
 
 
-def open_in_browser(file_path: str) -> bool:
+def open_in_browser(file_path_or_url: str) -> bool:
     """
-    在浏览器中打开HTML文件
+    在浏览器中打开HTML文件或URL
 
     Args:
-        file_path: HTML文件路径
+        file_path_or_url: HTML文件路径或URL
 
     Returns:
         bool: 是否成功打开
     """
     try:
-        if os.path.exists(file_path):
-            # 获取文件的绝对路径
-            abs_path = os.path.abspath(file_path)
-            # 转换为URL格式
-            file_url = f"file://{abs_path}"
-            # 在浏览器中打开
-            webbrowser.open(file_url)
-            logger.info(f"已在浏览器中打开: {file_url}")
+        # 检查是否在服务器上运行
+        if is_running_on_server():
+            logger.info("在服务器上运行，不打开浏览器")
             return True
+
+        # 如果是文件路径，检查文件是否存在
+        if not file_path_or_url.startswith(('http://', 'https://', 'file://')):
+            if os.path.exists(file_path_or_url):
+                # 获取HTML文件URL
+                url = get_html_url(file_path_or_url)
+            else:
+                logger.error(f"文件不存在: {file_path_or_url}")
+                return False
         else:
-            logger.error(f"文件不存在: {file_path}")
-            return False
+            # 已经是URL格式
+            url = file_path_or_url
+
+        # 在浏览器中打开
+        webbrowser.open(url)
+        logger.info(f"已在浏览器中打开: {url}")
+        return True
     except Exception as e:
         logger.error(f"在浏览器中打开文件时发生错误: {e}")
         return False
@@ -1172,11 +1184,12 @@ def generate_backtest_html(
         with open(file_path, 'w', encoding='utf-8') as f:
             f.write(html_content)
 
-        # 获取绝对路径
-        abs_file_path = os.path.abspath(file_path)
-        logger.info(f"回测结果图表已生成: {abs_file_path}")
+        # 获取HTML文件URL
+        html_url = get_html_url(file_path)
+        logger.info(f"回测结果图表已生成: {file_path}")
+        logger.info(f"回测结果图表URL: {html_url}")
 
-        return abs_file_path
+        return html_url
     except Exception as e:
         logger.error(f"生成回测结果图表时发生错误: {e}")
         return None

@@ -1,0 +1,43 @@
+# Nginx配置文件 - 为量化交易助手提供HTML文件服务
+# 将此文件放置在 /etc/nginx/conf.d/ 目录下，然后重启Nginx
+
+server {
+    listen 80;
+    server_name _;  # 匹配所有域名
+
+    # 日志配置
+    access_log /var/log/nginx/quant_mcp_access.log;
+    error_log /var/log/nginx/quant_mcp_error.log;
+
+    # 只允许访问HTML文件
+    location / {
+        root /path/to/quant_mcp-1/data/charts;  # 替换为实际的charts目录路径
+        
+        # 只允许访问HTML文件
+        location ~* \.html$ {
+            # 设置MIME类型
+            types {
+                text/html html;
+            }
+            
+            # 添加安全头
+            add_header X-Content-Type-Options "nosniff";
+            add_header X-XSS-Protection "1; mode=block";
+            add_header X-Frame-Options "SAMEORIGIN";
+            
+            # 禁用目录列表
+            autoindex off;
+        }
+        
+        # 拒绝访问其他文件
+        location ~ \. {
+            deny all;
+        }
+        
+        # 禁用目录列表
+        autoindex off;
+        
+        # 默认返回403
+        return 403;
+    }
+}

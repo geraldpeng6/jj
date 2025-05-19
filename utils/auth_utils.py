@@ -99,7 +99,7 @@ def get_headers() -> Dict[str, str]:
         'Sec-Fetch-Mode': 'cors',
         'Sec-Fetch-Dest': 'empty',
         'Referer': 'https://hitrader.yueniusz.com/',
-        'Accept-Encoding': 'gzip, deflate, br',
+        'Accept-Encoding': 'identity',  # 禁用压缩响应
         'Accept-Language': 'zh-CN,zh;q=0.9',
         'Priority': 'u=1, i'
     }

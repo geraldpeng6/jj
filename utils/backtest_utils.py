@@ -1331,7 +1331,7 @@ def run_backtest(
 
                     if chart_path:
                         result['chart_path'] = chart_path
-                        # 在浏览器中打开图表
+                        # 尝试在浏览器中打开图表（本地环境）
                         open_in_browser(chart_path)
                     else:
                         # 如果回测图表生成失败，尝试生成普通K线图表
@@ -1346,7 +1346,7 @@ def run_backtest(
 
                         if chart_path:
                             result['chart_path'] = chart_path
-                            # 在浏览器中打开图表
+                            # 尝试在浏览器中打开图表（本地环境）
                             open_in_browser(chart_path)
                 else:
                     logger.warning(f"获取K线数据失败或数据为空: {symbol}.{exchange}")

@@ -92,10 +92,16 @@ async def get_kline_data(
                     fq=fq
                 )
 
-                # 在浏览器中打开图表
+                # 处理图表URL
                 if chart_file:
+                    # 尝试在浏览器中打开图表（本地环境）
                     open_in_browser(chart_file)
-                    result_str += f"\n\nK线图表已生成并在浏览器中打开: {chart_file}"
+
+                    # 检查是否是URL格式
+                    if chart_file.startswith(('http://', 'https://')):
+                        result_str += f"\n\nK线图表已生成，可通过以下链接访问:\n{chart_file}"
+                    else:
+                        result_str += f"\n\nK线图表已生成: {chart_file}"
                 else:
                     result_str += "\n\n生成K线图表失败"
             except Exception as e:
