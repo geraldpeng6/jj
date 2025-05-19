@@ -12,7 +12,6 @@ import logging
 import requests
 import gzip
 import io
-import zlib
 from typing import Dict, Optional, Any, List
 
 from utils.auth_utils import load_auth_config, get_auth_info, get_headers
@@ -55,6 +54,9 @@ def get_strategy_list(strategy_group: str = "user") -> Optional[List[Dict[str, A
     params = {"user_id": user_id}
     headers = get_headers()
 
+    # 修改请求头，禁用压缩响应
+    headers['Accept-Encoding'] = 'identity'
+
     # 设置代理为None
     proxies = None
 
@@ -69,117 +71,24 @@ def get_strategy_list(strategy_group: str = "user") -> Optional[List[Dict[str, A
         )
         response.raise_for_status()
 
-        # 检查响应内容类型和编码
-        content_type = response.headers.get('Content-Type', '')
-        content_encoding = response.headers.get('Content-Encoding', '')
-
-        logger.debug(f"响应状态码: {response.status_code}")
-        logger.debug(f"响应内容类型: {content_type}")
-        logger.debug(f"响应内容编码: {content_encoding}")
-        logger.debug(f"响应头: {dict(response.headers)}")
-
-        # 处理响应内容
+        # 获取响应内容
         content = response.content
 
-        # 记录原始内容的前20个字节（十六进制格式）用于调试
-        if len(content) > 0:
-            hex_content = content[:20].hex()
-            logger.debug(f"原始内容前20字节(十六进制): {hex_content}")
-
-        # 尝试多种方法解压内容
-        decompressed = False
-        original_content = content
-
-        # 方法1: 检查Content-Encoding头
-        if content_encoding.lower() == 'gzip':
+        # 检查是否为gzip压缩内容
+        if len(content) > 2 and content[:2] == b'\x1f\x8b':
+            logger.info("检测到gzip压缩响应，尝试解压...")
             try:
-                logger.debug("尝试使用gzip.decompress解压(基于Content-Encoding头)...")
                 content = gzip.decompress(content)
-                logger.info(f"gzip.decompress成功，解压后大小: {len(content)} 字节")
-                decompressed = True
+                logger.info("gzip解压成功")
             except Exception as e:
-                logger.warning(f"gzip.decompress失败: {e}")
-
-        # 方法2: 检查内容特征
-        if not decompressed and len(content) > 2 and content[:2] == b'\x1f\x8b':
-            try:
-                logger.debug("尝试使用gzip.decompress解压(基于内容特征)...")
-                content = gzip.decompress(content)
-                logger.info(f"gzip.decompress成功，解压后大小: {len(content)} 字节")
-                decompressed = True
-            except Exception as e:
-                logger.warning(f"gzip.decompress失败: {e}")
-
-        # 方法3: 使用zlib解压
-        if not decompressed:
-            try:
-                logger.debug("尝试使用zlib.decompress解压...")
-                # 尝试不同的窗口大小
-                for window_bits in [15, 15 + 16, -15]:
-                    try:
-                        decomp_content = zlib.decompress(original_content, window_bits)
-                        logger.info(f"zlib.decompress成功(window_bits={window_bits})，解压后大小: {len(decomp_content)} 字节")
-                        content = decomp_content
-                        decompressed = True
-                        break
-                    except Exception as e:
-                        logger.debug(f"zlib.decompress失败(window_bits={window_bits}): {e}")
-            except Exception as e:
-                logger.warning(f"所有zlib解压尝试都失败: {e}")
-
-        # 方法4: 使用requests内置的解压功能
-        if not decompressed and hasattr(response, 'text'):
-            try:
-                logger.debug("尝试使用response.text获取解压内容...")
-                text_content = response.text
-                if text_content and len(text_content) > 0:
-                    logger.info(f"使用response.text成功，内容长度: {len(text_content)} 字符")
-                    # 将文本转换回字节以保持一致性
-                    content = text_content.encode('utf-8')
-                    decompressed = True
-            except Exception as e:
-                logger.warning(f"使用response.text失败: {e}")
-
-        # 尝试解析JSON
-        try:
-            if isinstance(content, bytes):
-                # 尝试多种编码
-                for encoding in ['utf-8', 'latin1', 'cp1252']:
-                    try:
-                        data = json.loads(content.decode(encoding))
-                        logger.debug(f"成功使用{encoding}编码从字节内容解析JSON")
-                        break
-                    except UnicodeDecodeError:
-                        logger.debug(f"使用{encoding}解码失败，尝试下一种编码")
-                    except json.JSONDecodeError as e:
-                        logger.debug(f"使用{encoding}解码后JSON解析失败: {e}")
-                        # 如果解码成功但JSON解析失败，记录部分内容
-                        decoded = content.decode(encoding, errors='replace')
-                        logger.debug(f"解码后内容前100个字符: {decoded[:100]}")
-                        raise
-            else:
-                data = response.json()
-                logger.debug("使用response.json()解析JSON")
-        except Exception as e:
-            logger.error(f"JSON解析失败: {e}")
-            # 尝试记录原始内容的一部分
-            if isinstance(content, bytes):
-                try:
-                    logger.error(f"内容前200个字符: {content[:200].decode('utf-8', errors='replace')}")
-                except Exception:
-                    logger.error(f"无法解码内容，十六进制表示: {content[:100].hex()}")
-            else:
-                logger.error(f"内容前200个字符: {str(content)[:200]}")
-
-            # 尝试直接使用response.json()作为最后的手段
-            try:
-                logger.debug("尝试直接使用response.json()作为最后的手段...")
-                data = response.json()
-                logger.info("使用response.json()成功解析JSON")
-            except Exception as json_e:
-                logger.error(f"最后尝试使用response.json()也失败: {json_e}")
-                # 如果所有尝试都失败，则返回None
+                logger.error(f"gzip解压失败: {e}")
                 return None
+
+        # 解析JSON
+        if isinstance(content, bytes):
+            data = json.loads(content.decode('utf-8'))
+        else:
+            data = response.json()
 
         if data.get('code') == 1 and data.get('msg') == 'ok':
             strategy_list = data.get('data', {}).get('strategy_list', [])
@@ -248,6 +157,9 @@ def get_strategy_detail(strategy_id: str, strategy_group: str = "library") -> Op
     }
     headers = get_headers()
 
+    # 修改请求头，禁用压缩响应
+    headers['Accept-Encoding'] = 'identity'
+
     # 设置代理为None
     proxies = None
 
@@ -262,117 +174,24 @@ def get_strategy_detail(strategy_id: str, strategy_group: str = "library") -> Op
         )
         response.raise_for_status()
 
-        # 检查响应内容类型和编码
-        content_type = response.headers.get('Content-Type', '')
-        content_encoding = response.headers.get('Content-Encoding', '')
-
-        logger.debug(f"响应状态码: {response.status_code}")
-        logger.debug(f"响应内容类型: {content_type}")
-        logger.debug(f"响应内容编码: {content_encoding}")
-        logger.debug(f"响应头: {dict(response.headers)}")
-
-        # 处理响应内容
+        # 获取响应内容
         content = response.content
 
-        # 记录原始内容的前20个字节（十六进制格式）用于调试
-        if len(content) > 0:
-            hex_content = content[:20].hex()
-            logger.debug(f"原始内容前20字节(十六进制): {hex_content}")
-
-        # 尝试多种方法解压内容
-        decompressed = False
-        original_content = content
-
-        # 方法1: 检查Content-Encoding头
-        if content_encoding.lower() == 'gzip':
+        # 检查是否为gzip压缩内容
+        if len(content) > 2 and content[:2] == b'\x1f\x8b':
+            logger.info("检测到gzip压缩响应，尝试解压...")
             try:
-                logger.debug("尝试使用gzip.decompress解压(基于Content-Encoding头)...")
                 content = gzip.decompress(content)
-                logger.info(f"gzip.decompress成功，解压后大小: {len(content)} 字节")
-                decompressed = True
+                logger.info("gzip解压成功")
             except Exception as e:
-                logger.warning(f"gzip.decompress失败: {e}")
-
-        # 方法2: 检查内容特征
-        if not decompressed and len(content) > 2 and content[:2] == b'\x1f\x8b':
-            try:
-                logger.debug("尝试使用gzip.decompress解压(基于内容特征)...")
-                content = gzip.decompress(content)
-                logger.info(f"gzip.decompress成功，解压后大小: {len(content)} 字节")
-                decompressed = True
-            except Exception as e:
-                logger.warning(f"gzip.decompress失败: {e}")
-
-        # 方法3: 使用zlib解压
-        if not decompressed:
-            try:
-                logger.debug("尝试使用zlib.decompress解压...")
-                # 尝试不同的窗口大小
-                for window_bits in [15, 15 + 16, -15]:
-                    try:
-                        decomp_content = zlib.decompress(original_content, window_bits)
-                        logger.info(f"zlib.decompress成功(window_bits={window_bits})，解压后大小: {len(decomp_content)} 字节")
-                        content = decomp_content
-                        decompressed = True
-                        break
-                    except Exception as e:
-                        logger.debug(f"zlib.decompress失败(window_bits={window_bits}): {e}")
-            except Exception as e:
-                logger.warning(f"所有zlib解压尝试都失败: {e}")
-
-        # 方法4: 使用requests内置的解压功能
-        if not decompressed and hasattr(response, 'text'):
-            try:
-                logger.debug("尝试使用response.text获取解压内容...")
-                text_content = response.text
-                if text_content and len(text_content) > 0:
-                    logger.info(f"使用response.text成功，内容长度: {len(text_content)} 字符")
-                    # 将文本转换回字节以保持一致性
-                    content = text_content.encode('utf-8')
-                    decompressed = True
-            except Exception as e:
-                logger.warning(f"使用response.text失败: {e}")
-
-        # 尝试解析JSON
-        try:
-            if isinstance(content, bytes):
-                # 尝试多种编码
-                for encoding in ['utf-8', 'latin1', 'cp1252']:
-                    try:
-                        data = json.loads(content.decode(encoding))
-                        logger.debug(f"成功使用{encoding}编码从字节内容解析JSON")
-                        break
-                    except UnicodeDecodeError:
-                        logger.debug(f"使用{encoding}解码失败，尝试下一种编码")
-                    except json.JSONDecodeError as e:
-                        logger.debug(f"使用{encoding}解码后JSON解析失败: {e}")
-                        # 如果解码成功但JSON解析失败，记录部分内容
-                        decoded = content.decode(encoding, errors='replace')
-                        logger.debug(f"解码后内容前100个字符: {decoded[:100]}")
-                        raise
-            else:
-                data = response.json()
-                logger.debug("使用response.json()解析JSON")
-        except Exception as e:
-            logger.error(f"JSON解析失败: {e}")
-            # 尝试记录原始内容的一部分
-            if isinstance(content, bytes):
-                try:
-                    logger.error(f"内容前200个字符: {content[:200].decode('utf-8', errors='replace')}")
-                except Exception:
-                    logger.error(f"无法解码内容，十六进制表示: {content[:100].hex()}")
-            else:
-                logger.error(f"内容前200个字符: {str(content)[:200]}")
-
-            # 尝试直接使用response.json()作为最后的手段
-            try:
-                logger.debug("尝试直接使用response.json()作为最后的手段...")
-                data = response.json()
-                logger.info("使用response.json()成功解析JSON")
-            except Exception as json_e:
-                logger.error(f"最后尝试使用response.json()也失败: {json_e}")
-                # 如果所有尝试都失败，则返回None
+                logger.error(f"gzip解压失败: {e}")
                 return None
+
+        # 解析JSON
+        if isinstance(content, bytes):
+            data = json.loads(content.decode('utf-8'))
+        else:
+            data = response.json()
 
         if data.get('code') == 1 and data.get('msg') == 'ok':
             strategy_detail = data.get('data', {})
@@ -434,6 +253,9 @@ def delete_strategy(strategy_id: str) -> requests.Response:
     params = {"user_id": user_id}
     headers = get_headers()
 
+    # 修改请求头，禁用压缩响应
+    headers['Accept-Encoding'] = 'identity'
+
     data = {
         "user_id": user_id,
         "strategy_id": strategy_id
@@ -455,117 +277,24 @@ def delete_strategy(strategy_id: str) -> requests.Response:
         )
         response.raise_for_status()
 
-        # 检查响应内容类型和编码
-        content_type = response.headers.get('Content-Type', '')
-        content_encoding = response.headers.get('Content-Encoding', '')
-
-        logger.debug(f"响应状态码: {response.status_code}")
-        logger.debug(f"响应内容类型: {content_type}")
-        logger.debug(f"响应内容编码: {content_encoding}")
-        logger.debug(f"响应头: {dict(response.headers)}")
-
-        # 处理响应内容
+        # 获取响应内容
         content = response.content
 
-        # 记录原始内容的前20个字节（十六进制格式）用于调试
-        if len(content) > 0:
-            hex_content = content[:20].hex()
-            logger.debug(f"原始内容前20字节(十六进制): {hex_content}")
-
-        # 尝试多种方法解压内容
-        decompressed = False
-        original_content = content
-
-        # 方法1: 检查Content-Encoding头
-        if content_encoding.lower() == 'gzip':
+        # 检查是否为gzip压缩内容
+        if len(content) > 2 and content[:2] == b'\x1f\x8b':
+            logger.info("检测到gzip压缩响应，尝试解压...")
             try:
-                logger.debug("尝试使用gzip.decompress解压(基于Content-Encoding头)...")
                 content = gzip.decompress(content)
-                logger.info(f"gzip.decompress成功，解压后大小: {len(content)} 字节")
-                decompressed = True
+                logger.info("gzip解压成功")
             except Exception as e:
-                logger.warning(f"gzip.decompress失败: {e}")
-
-        # 方法2: 检查内容特征
-        if not decompressed and len(content) > 2 and content[:2] == b'\x1f\x8b':
-            try:
-                logger.debug("尝试使用gzip.decompress解压(基于内容特征)...")
-                content = gzip.decompress(content)
-                logger.info(f"gzip.decompress成功，解压后大小: {len(content)} 字节")
-                decompressed = True
-            except Exception as e:
-                logger.warning(f"gzip.decompress失败: {e}")
-
-        # 方法3: 使用zlib解压
-        if not decompressed:
-            try:
-                logger.debug("尝试使用zlib.decompress解压...")
-                # 尝试不同的窗口大小
-                for window_bits in [15, 15 + 16, -15]:
-                    try:
-                        decomp_content = zlib.decompress(original_content, window_bits)
-                        logger.info(f"zlib.decompress成功(window_bits={window_bits})，解压后大小: {len(decomp_content)} 字节")
-                        content = decomp_content
-                        decompressed = True
-                        break
-                    except Exception as e:
-                        logger.debug(f"zlib.decompress失败(window_bits={window_bits}): {e}")
-            except Exception as e:
-                logger.warning(f"所有zlib解压尝试都失败: {e}")
-
-        # 方法4: 使用requests内置的解压功能
-        if not decompressed and hasattr(response, 'text'):
-            try:
-                logger.debug("尝试使用response.text获取解压内容...")
-                text_content = response.text
-                if text_content and len(text_content) > 0:
-                    logger.info(f"使用response.text成功，内容长度: {len(text_content)} 字符")
-                    # 将文本转换回字节以保持一致性
-                    content = text_content.encode('utf-8')
-                    decompressed = True
-            except Exception as e:
-                logger.warning(f"使用response.text失败: {e}")
-
-        # 尝试解析JSON
-        try:
-            if isinstance(content, bytes):
-                # 尝试多种编码
-                for encoding in ['utf-8', 'latin1', 'cp1252']:
-                    try:
-                        result = json.loads(content.decode(encoding))
-                        logger.debug(f"成功使用{encoding}编码从字节内容解析JSON")
-                        break
-                    except UnicodeDecodeError:
-                        logger.debug(f"使用{encoding}解码失败，尝试下一种编码")
-                    except json.JSONDecodeError as e:
-                        logger.debug(f"使用{encoding}解码后JSON解析失败: {e}")
-                        # 如果解码成功但JSON解析失败，记录部分内容
-                        decoded = content.decode(encoding, errors='replace')
-                        logger.debug(f"解码后内容前100个字符: {decoded[:100]}")
-                        raise
-            else:
-                result = response.json()
-                logger.debug("使用response.json()解析JSON")
-        except Exception as e:
-            logger.error(f"JSON解析失败: {e}")
-            # 尝试记录原始内容的一部分
-            if isinstance(content, bytes):
-                try:
-                    logger.error(f"内容前200个字符: {content[:200].decode('utf-8', errors='replace')}")
-                except Exception:
-                    logger.error(f"无法解码内容，十六进制表示: {content[:100].hex()}")
-            else:
-                logger.error(f"内容前200个字符: {str(content)[:200]}")
-
-            # 尝试直接使用response.json()作为最后的手段
-            try:
-                logger.debug("尝试直接使用response.json()作为最后的手段...")
-                result = response.json()
-                logger.info("使用response.json()成功解析JSON")
-            except Exception as json_e:
-                logger.error(f"最后尝试使用response.json()也失败: {json_e}")
-                # 如果所有尝试都失败，则返回None
+                logger.error(f"gzip解压失败: {e}")
                 return None
+
+        # 解析JSON
+        if isinstance(content, bytes):
+            result = json.loads(content.decode('utf-8'))
+        else:
+            result = response.json()
 
         if result.get('code') == 1 and result.get('msg') == 'ok':
             logger.info(f"删除策略成功，策略ID: {strategy_id}")
