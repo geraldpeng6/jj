@@ -10,6 +10,8 @@
 import json
 import logging
 import requests
+import gzip
+import io
 from typing import Dict, Optional, Any, List
 
 from utils.auth_utils import load_auth_config, get_auth_info, get_headers
@@ -65,7 +67,30 @@ def get_strategy_list(strategy_group: str = "user") -> Optional[List[Dict[str, A
             timeout=30  # 增加超时时间到30秒
         )
         response.raise_for_status()
-        data = response.json()
+
+        # 检查响应内容类型和编码
+        content_type = response.headers.get('Content-Type', '')
+        content_encoding = response.headers.get('Content-Encoding', '')
+
+        logger.debug(f"响应内容类型: {content_type}")
+        logger.debug(f"响应内容编码: {content_encoding}")
+
+        # 处理可能的压缩响应
+        content = response.content
+        if content_encoding.lower() == 'gzip' or (len(content) > 2 and content[:2] == b'\x1f\x8b'):
+            try:
+                # 尝试解压gzip内容
+                logger.info("检测到gzip压缩响应，尝试解压...")
+                content = gzip.decompress(content)
+                logger.info("gzip解压成功")
+            except Exception as e:
+                logger.warning(f"gzip解压失败: {e}，将使用原始内容")
+
+        # 尝试解析JSON
+        if isinstance(content, bytes):
+            data = json.loads(content.decode('utf-8'))
+        else:
+            data = response.json()
 
         if data.get('code') == 1 and data.get('msg') == 'ok':
             strategy_list = data.get('data', {}).get('strategy_list', [])
@@ -147,7 +172,30 @@ def get_strategy_detail(strategy_id: str, strategy_group: str = "library") -> Op
             timeout=30  # 增加超时时间到30秒
         )
         response.raise_for_status()
-        data = response.json()
+
+        # 检查响应内容类型和编码
+        content_type = response.headers.get('Content-Type', '')
+        content_encoding = response.headers.get('Content-Encoding', '')
+
+        logger.debug(f"响应内容类型: {content_type}")
+        logger.debug(f"响应内容编码: {content_encoding}")
+
+        # 处理可能的压缩响应
+        content = response.content
+        if content_encoding.lower() == 'gzip' or (len(content) > 2 and content[:2] == b'\x1f\x8b'):
+            try:
+                # 尝试解压gzip内容
+                logger.info("检测到gzip压缩响应，尝试解压...")
+                content = gzip.decompress(content)
+                logger.info("gzip解压成功")
+            except Exception as e:
+                logger.warning(f"gzip解压失败: {e}，将使用原始内容")
+
+        # 尝试解析JSON
+        if isinstance(content, bytes):
+            data = json.loads(content.decode('utf-8'))
+        else:
+            data = response.json()
 
         if data.get('code') == 1 and data.get('msg') == 'ok':
             strategy_detail = data.get('data', {})
@@ -208,6 +256,10 @@ def delete_strategy(strategy_id: str) -> requests.Response:
     url = f"{BASE_URL}/trader-service/strategy/user-strategy"
     params = {"user_id": user_id}
     headers = get_headers()
+
+    # 修改请求头，禁用压缩
+    headers['Accept-Encoding'] = 'identity'
+
     data = {
         "user_id": user_id,
         "strategy_id": strategy_id
@@ -228,7 +280,30 @@ def delete_strategy(strategy_id: str) -> requests.Response:
             timeout=30  # 增加超时时间到30秒
         )
         response.raise_for_status()
-        result = response.json()
+
+        # 检查响应内容类型和编码
+        content_type = response.headers.get('Content-Type', '')
+        content_encoding = response.headers.get('Content-Encoding', '')
+
+        logger.debug(f"响应内容类型: {content_type}")
+        logger.debug(f"响应内容编码: {content_encoding}")
+
+        # 处理可能的压缩响应
+        content = response.content
+        if content_encoding.lower() == 'gzip' or (len(content) > 2 and content[:2] == b'\x1f\x8b'):
+            try:
+                # 尝试解压gzip内容
+                logger.info("检测到gzip压缩响应，尝试解压...")
+                content = gzip.decompress(content)
+                logger.info("gzip解压成功")
+            except Exception as e:
+                logger.warning(f"gzip解压失败: {e}，将使用原始内容")
+
+        # 尝试解析JSON
+        if isinstance(content, bytes):
+            result = json.loads(content.decode('utf-8'))
+        else:
+            result = response.json()
 
         if result.get('code') == 1 and result.get('msg') == 'ok':
             logger.info(f"删除策略成功，策略ID: {strategy_id}")
