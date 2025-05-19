@@ -275,18 +275,50 @@ class ChartRequestHandler(SimpleHTTPRequestHandler):
         self.end_headers()
         return
 
-def get_free_port(start_port=80, max_attempts=100):
+def is_running_on_ec2():
+    """
+    检测是否在EC2实例上运行
+
+    Returns:
+        bool: 是否在EC2实例上运行
+    """
+    try:
+        # 尝试访问EC2元数据服务
+        response = requests.get('http://169.254.169.254/latest/meta-data/instance-id', timeout=0.1)
+        return response.status_code == 200
+    except:
+        return False
+
+def get_free_port(start_port=80, max_attempts=100, force_port=None):
     """
     获取一个可用的端口号
 
     Args:
         start_port: 起始端口号，默认为80（HTTP标准端口）
         max_attempts: 最大尝试次数
+        force_port: 强制使用指定端口，如果不可用则返回None
 
     Returns:
         int: 可用的端口号，如果没有找到则返回None
     """
-    # 首先尝试使用标准端口80
+    # 检查是否在EC2上运行
+    on_ec2 = is_running_on_ec2()
+
+    # 如果强制使用指定端口或在EC2上运行（只能使用端口80）
+    if force_port is not None or on_ec2:
+        port_to_use = force_port if force_port is not None else 80
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.bind(('', port_to_use))
+                logger.info(f"成功绑定到端口 {port_to_use}")
+                return port_to_use
+        except OSError as e:
+            logger.error(f"无法绑定到端口 {port_to_use}: {e}")
+            if on_ec2:
+                logger.error("在EC2上运行且无法绑定到端口80，请确保没有其他进程占用该端口")
+            return None
+
+    # 正常流程：首先尝试使用标准端口80
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             s.bind(('', start_port))
@@ -383,6 +415,9 @@ def diagnose_network() -> dict:
     Returns:
         dict: 诊断结果
     """
+    # 检查是否在EC2上运行
+    on_ec2 = is_running_on_ec2()
+
     result = {
         "local_ip": get_local_ip(),
         "public_ip": get_public_ip(),
@@ -392,7 +427,8 @@ def diagnose_network() -> dict:
         "https_port_open": False,
         "server_running": False,
         "https_enabled": _https_enabled,
-        "can_use_privileged_port": can_use_privileged_port()
+        "can_use_privileged_port": can_use_privileged_port(),
+        "running_on_ec2": on_ec2
     }
 
     # 检查服务器是否运行
@@ -427,12 +463,22 @@ def diagnose_network() -> dict:
         result["suggestions"].append(f"HTTPS端口 {_https_port} 在本地可访问但在公网不可访问，可能需要配置端口转发或检查防火墙设置")
 
     # 添加特权端口相关的建议
-    if not result["can_use_privileged_port"]:
+    if not result["can_use_privileged_port"] and not result["running_on_ec2"]:
         if _server_port != 80:
             result["suggestions"].append("当前进程无权使用标准HTTP端口80，正在使用备用端口。如需使用标准端口，请以管理员/root权限运行程序")
 
         if _https_enabled and _https_port != 443:
             result["suggestions"].append("当前进程无权使用标准HTTPS端口443，正在使用备用端口。如需使用标准端口，请以管理员/root权限运行程序")
+
+    # 添加EC2相关的建议
+    if result["running_on_ec2"]:
+        result["suggestions"].append("检测到在EC2实例上运行，已强制使用HTTP端口80")
+
+        if not result.get("http_port_open_public", False):
+            result["suggestions"].append("EC2实例的HTTP端口80在公网不可访问，请检查EC2安全组设置，确保允许入站TCP端口80")
+
+        if _https_enabled and not result.get("https_port_open_public", False):
+            result["suggestions"].append(f"EC2实例的HTTPS端口{_https_port}在公网不可访问，请检查EC2安全组设置，确保允许入站TCP端口{_https_port}")
 
     return result
 
@@ -473,6 +519,21 @@ def start_server(root_dir: str = "data/charts", host: str = "0.0.0.0", port: Opt
     global _server_instance, _server_thread, _server_port, _server_host, _server_root, _public_ip
     global _https_enabled, _https_port, _cert_file, _key_file
 
+    # 检查是否在EC2上运行
+    on_ec2 = is_running_on_ec2()
+    if on_ec2:
+        logger.info("检测到在EC2实例上运行，将强制使用端口80")
+        # 在EC2上，强制使用端口80
+        port = 80
+        # 在EC2上，默认禁用HTTPS，除非明确指定了HTTPS端口
+        if https_port is None:
+            enable_https = False
+            logger.info("在EC2上运行且未指定HTTPS端口，禁用HTTPS")
+        else:
+            logger.info(f"在EC2上运行，使用指定的HTTPS端口: {https_port}")
+    else:
+        logger.info("未检测到在EC2实例上运行，将使用正常的端口选择逻辑")
+
     # 如果服务器已经在运行，则返回当前端口
     if _server_instance is not None and _server_thread is not None and _server_thread.is_alive():
         return _server_port
@@ -483,8 +544,12 @@ def start_server(root_dir: str = "data/charts", host: str = "0.0.0.0", port: Opt
 
         # 如果没有指定端口，则尝试使用标准端口80
         if port is None:
-            # 检查是否有权限使用特权端口
-            if can_use_privileged_port():
+            # 如果在EC2上运行，强制使用端口80
+            if on_ec2:
+                port = 80
+                logger.info("在EC2上运行，强制使用HTTP标准端口80")
+            # 否则，检查是否有权限使用特权端口
+            elif can_use_privileged_port():
                 port = 80
                 logger.info("使用HTTP标准端口80")
             else:
@@ -494,6 +559,8 @@ def start_server(root_dir: str = "data/charts", host: str = "0.0.0.0", port: Opt
                     logger.error("无法找到可用端口")
                     return None
                 logger.warning(f"无权使用端口80，使用备用端口: {port}")
+        elif port == 80 and on_ec2:
+            logger.info("在EC2上运行，使用指定的HTTP端口80")
 
         # 设置全局变量
         _server_root = os.path.abspath(root_dir)
@@ -545,8 +612,13 @@ def start_server(root_dir: str = "data/charts", host: str = "0.0.0.0", port: Opt
         if enable_https:
             # 如果没有指定HTTPS端口，则尝试使用标准端口443
             if https_port is None:
-                # 检查是否有权限使用特权端口
-                if can_use_privileged_port():
+                # 如果在EC2上运行，不启用HTTPS（除非明确指定了HTTPS端口）
+                if on_ec2:
+                    logger.warning("在EC2上运行且未指定HTTPS端口，禁用HTTPS")
+                    _https_enabled = False
+                    return port  # 直接返回HTTP端口
+                # 否则，检查是否有权限使用特权端口
+                elif can_use_privileged_port():
                     https_port = 443
                     logger.info("使用HTTPS标准端口443")
                 else:

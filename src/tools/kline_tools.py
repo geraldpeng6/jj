@@ -254,6 +254,7 @@ async def diagnose_web_server() -> str:
             output += f"HTTPS状态: {'已启用' if result['https_enabled'] else '未启用'}\n"
 
         output += f"特权端口权限: {'有' if result['can_use_privileged_port'] else '无'}\n"
+        output += f"运行环境: {'EC2实例' if result.get('running_on_ec2', False) else '普通环境'}\n"
 
         # 端口状态
         output += "\n端口状态:\n"
@@ -282,13 +283,21 @@ async def diagnose_web_server() -> str:
             output += "3. 如果使用云服务器，检查安全组设置，确保开放相应端口\n"
             output += "4. 联系网络管理员，确认是否有其他网络限制\n"
 
-        # 如果没有特权端口权限，添加额外建议
-        if not result.get('can_use_privileged_port', False):
+        # 如果没有特权端口权限且不在EC2上运行，添加额外建议
+        if not result.get('can_use_privileged_port', False) and not result.get('running_on_ec2', False):
             output += "\n要使用标准端口(80/443)，您需要:\n"
             output += "1. 在Linux/Mac上，使用sudo运行程序\n"
             output += "2. 在Windows上，以管理员身份运行程序\n"
             output += "3. 或者，配置系统允许非特权用户使用这些端口\n"
             output += "4. 如果在Docker中运行，确保正确映射端口\n"
+
+        # 如果在EC2上运行，添加EC2特定的建议
+        if result.get('running_on_ec2', False):
+            output += "\nEC2实例特定建议:\n"
+            output += "1. 已自动配置使用HTTP端口80\n"
+            output += "2. 确保EC2安全组允许入站TCP端口80\n"
+            output += "3. 如果需要HTTPS，请在启动服务器时明确指定HTTPS端口\n"
+            output += "4. 考虑使用AWS负载均衡器(ELB)来处理HTTPS终止\n"
 
         return output
     except Exception as e:
