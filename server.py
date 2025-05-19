@@ -13,6 +13,7 @@ import inspect
 from mcp.server.fastmcp import FastMCP
 
 from utils.logging_utils import setup_logging
+from utils.html_server import generate_test_html, is_nginx_available
 from src.tools import register_all_tools
 from src.resources import register_all_resources
 from src.prompts import register_all_prompts
@@ -65,6 +66,27 @@ def run_server(transport: str = 'stdio', host: str = '0.0.0.0', port: int = 8000
         if not os.path.exists('data/config/auth.json'):
             logger.warning("认证配置文件不存在，请复制 data/config/auth.json.example 并填写认证信息")
             print("警告: 认证配置文件不存在，请复制 data/config/auth.json.example 并填写认证信息", file=sys.stderr)
+
+        # 生成测试HTML文件
+        try:
+            test_url = generate_test_html()
+            if test_url:
+                logger.info(f"测试HTML文件已生成，URL: {test_url}")
+                print(f"测试HTML文件已生成，URL: {test_url}")
+
+                # 检查Nginx是否可用
+                if is_nginx_available():
+                    logger.info("检测到Nginx已安装，HTML文件可通过Web服务器访问")
+                    print("检测到Nginx已安装，HTML文件可通过Web服务器访问")
+                else:
+                    logger.warning("未检测到Nginx，HTML文件将通过本地文件URL访问")
+                    print("警告: 未检测到Nginx，HTML文件将通过本地文件URL访问", file=sys.stderr)
+            else:
+                logger.warning("生成测试HTML文件失败")
+                print("警告: 生成测试HTML文件失败", file=sys.stderr)
+        except Exception as e:
+            logger.error(f"生成测试HTML文件时发生错误: {e}")
+            print(f"错误: 生成测试HTML文件时发生错误: {e}", file=sys.stderr)
 
         # 创建服务器
         mcp = create_server()

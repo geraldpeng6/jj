@@ -52,6 +52,9 @@ def get_strategy_list(strategy_group: str = "user") -> Optional[List[Dict[str, A
     params = {"user_id": user_id}
     headers = get_headers()
 
+    # 添加禁用压缩响应的头部
+    headers['Accept-Encoding'] = 'identity'  # 禁用压缩响应
+
     try:
         response = requests.get(url, params=params, headers=headers)
         response.raise_for_status()
@@ -120,6 +123,9 @@ def get_strategy_detail(strategy_id: str, strategy_group: str = "library") -> Op
     }
     headers = get_headers()
 
+    # 添加禁用压缩响应的头部
+    headers['Accept-Encoding'] = 'identity'  # 禁用压缩响应
+
     try:
         response = requests.get(url, params=params, headers=headers)
         response.raise_for_status()
@@ -180,6 +186,10 @@ def delete_strategy(strategy_id: str) -> requests.Response:
     url = f"{BASE_URL}/trader-service/strategy/user-strategy"
     params = {"user_id": user_id}
     headers = get_headers()
+
+    # 添加禁用压缩响应的头部
+    headers['Accept-Encoding'] = 'identity'  # 禁用压缩响应
+
     data = {
         "user_id": user_id,
         "strategy_id": strategy_id

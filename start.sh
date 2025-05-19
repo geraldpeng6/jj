@@ -119,6 +119,99 @@ setup_venv() {
     echo -e "${GREEN}环境设置完成!${NC}"
 }
 
+# 检查并配置Nginx
+setup_nginx() {
+    echo -e "${YELLOW}检查Nginx配置...${NC}"
+
+    # 检查是否有root权限
+    if [ "$EUID" -ne 0 ]; then
+        echo -e "${YELLOW}注意: 未使用root权限运行，无法自动配置Nginx。将使用Python生成测试HTML文件。${NC}"
+
+        # 生成测试HTML文件
+        python -c "
+import sys
+sys.path.append('.')
+from utils.html_server import generate_test_html
+url = generate_test_html()
+print(f'测试HTML文件已生成，URL: {url}')
+"
+        return
+    fi
+
+    # 检查Nginx是否已安装
+    if ! command -v nginx &> /dev/null; then
+        echo -e "${YELLOW}Nginx未安装，跳过Nginx配置。${NC}"
+        return
+    fi
+
+    # 获取charts目录的绝对路径
+    CHARTS_DIR=$(pwd)/data/charts
+
+    # 生成Nginx配置
+    echo -e "${YELLOW}生成Nginx配置...${NC}"
+
+    # 创建配置文件
+    cat > /etc/nginx/conf.d/mcp_html_server.conf << EOF
+# MCP HTML服务器配置
+server {
+    listen 80;
+    server_name _;
+
+    # 禁止访问隐藏文件
+    location ~ /\\. {
+        deny all;
+    }
+
+    # 静态文件服务
+    location /charts/ {
+        alias $CHARTS_DIR/;
+
+        # 只允许访问HTML文件
+        location ~* \\.(html)$ {
+            add_header Content-Type text/html;
+            add_header Cache-Control "no-cache, no-store, must-revalidate";
+        }
+
+        # 禁止目录列表
+        autoindex off;
+
+        # 禁止访问其他类型的文件
+        location ~* \\.(php|py|js|json|txt|log|ini|conf)$ {
+            deny all;
+        }
+    }
+
+    # 默认页面 - 生成一个测试页面
+    location = / {
+        return 200 '<html><head><title>MCP HTML服务器</title></head><body><h1>MCP HTML服务器</h1><p>服务器运行正常</p></body></html>';
+        add_header Content-Type text/html;
+    }
+}
+EOF
+
+    # 测试Nginx配置
+    echo -e "${YELLOW}测试Nginx配置...${NC}"
+    nginx -t
+
+    if [ $? -eq 0 ]; then
+        # 重新加载Nginx配置
+        echo -e "${YELLOW}重新加载Nginx配置...${NC}"
+        nginx -s reload
+        echo -e "${GREEN}Nginx配置成功!${NC}"
+
+        # 生成测试HTML文件
+        python -c "
+import sys
+sys.path.append('.')
+from utils.html_server import generate_test_html
+url = generate_test_html()
+print(f'测试HTML文件已生成，URL: {url}')
+"
+    else
+        echo -e "${RED}Nginx配置测试失败，请检查配置文件。${NC}"
+    fi
+}
+
 # 主函数
 main() {
     echo -e "${YELLOW}准备启动MCP服务器，使用 $TRANSPORT 传输协议...${NC}"
@@ -129,6 +222,9 @@ main() {
 
     # 确保必要的目录存在
     mkdir -p data/logs data/klines data/charts data/temp data/config data/backtest data/templates
+
+    # 设置Nginx
+    setup_nginx
 
     # 根据传输协议选择不同的启动方式
     if [ "$TRANSPORT" == "stdio" ]; then
