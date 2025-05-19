@@ -51,7 +51,7 @@ def get_strategy_list(strategy_group: str = "user") -> Optional[List[Dict[str, A
 
     params = {"user_id": user_id}
     headers = get_headers()
-    
+
     # 设置代理为None
     proxies = None
 
@@ -85,13 +85,17 @@ def get_strategy_list(strategy_group: str = "user") -> Optional[List[Dict[str, A
             return None
 
     except requests.exceptions.RequestException as e:
-        logger.error(f"请求失败")
+        logger.error(f"请求失败: {e}")
+        # 添加更详细的错误信息
+        if hasattr(e, 'response') and e.response:
+            logger.error(f"响应状态码: {e.response.status_code}")
+            logger.error(f"响应内容: {e.response.text}")
         return None
     except json.JSONDecodeError as e:
-        logger.error(f"解析响应JSON失败")
+        logger.error(f"解析响应JSON失败: {e}")
         return None
     except Exception as e:
-        logger.error(f"获取{log_prefix}列表时发生未知错误")
+        logger.error(f"获取{log_prefix}列表时发生未知错误: {e}")
         return None
 
 
@@ -130,8 +134,18 @@ def get_strategy_detail(strategy_id: str, strategy_group: str = "library") -> Op
     }
     headers = get_headers()
 
+    # 设置代理为None
+    proxies = None
+
     try:
-        response = requests.get(url, params=params, headers=headers)
+        response = requests.get(
+            url,
+            params=params,
+            headers=headers,
+            proxies=proxies,
+            verify=True,
+            timeout=30  # 增加超时时间到30秒
+        )
         response.raise_for_status()
         data = response.json()
 
@@ -150,13 +164,17 @@ def get_strategy_detail(strategy_id: str, strategy_group: str = "library") -> Op
             return None
 
     except requests.exceptions.RequestException as e:
-        logger.error(f"请求失败")
+        logger.error(f"请求失败: {e}")
+        # 添加更详细的错误信息
+        if hasattr(e, 'response') and e.response:
+            logger.error(f"响应状态码: {e.response.status_code}")
+            logger.error(f"响应内容: {e.response.text}")
         return None
     except json.JSONDecodeError as e:
-        logger.error(f"解析响应JSON失败")
+        logger.error(f"解析响应JSON失败: {e}")
         return None
     except Exception as e:
-        logger.error(f"获取{log_prefix}详情时发生未知错误")
+        logger.error(f"获取{log_prefix}详情时发生未知错误: {e}")
         return None
 
 
@@ -195,22 +213,43 @@ def delete_strategy(strategy_id: str) -> requests.Response:
         "strategy_id": strategy_id
     }
 
+    # 设置代理为None
+    proxies = None
+
     try:
         # 使用DELETE请求
-        response = requests.delete(url, params=params, json=data, headers=headers)
+        response = requests.delete(
+            url,
+            params=params,
+            json=data,
+            headers=headers,
+            proxies=proxies,
+            verify=True,
+            timeout=30  # 增加超时时间到30秒
+        )
         response.raise_for_status()
         result = response.json()
 
         if result.get('code') == 1 and result.get('msg') == 'ok':
             logger.info(f"删除策略成功，策略ID: {strategy_id}")
         else:
-            logger.error(f"删除策略失败")
+            logger.error(f"删除策略失败，响应: {result}")
 
         # 返回完整的响应对象
         return response
 
+    except requests.exceptions.RequestException as e:
+        logger.error(f"请求失败: {e}")
+        # 添加更详细的错误信息
+        if hasattr(e, 'response') and e.response:
+            logger.error(f"响应状态码: {e.response.status_code}")
+            logger.error(f"响应内容: {e.response.text}")
+        return None
+    except json.JSONDecodeError as e:
+        logger.error(f"解析响应JSON失败: {e}")
+        return None
     except Exception as e:
-        logger.error(f"删除策略时发生错误")
+        logger.error(f"删除策略时发生未知错误: {e}")
         return None
 
 

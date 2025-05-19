@@ -22,12 +22,12 @@ from utils.strategy_utils import (
 logger = logging.getLogger('quant_mcp.strategy_tools')
 
 
-async def list_strategies(strategy_group: str = "user") -> str:
+async def list_strategies(strategy_group: str = "library") -> str:
     """
     获取策略列表
 
     Args:
-        strategy_group: 策略组类型，"user"表示用户策略，"library"表示策略库策略，默认为"user"
+        strategy_group: 策略组类型，"user"表示用户策略，"library"表示策略库策略，默认为"library"
 
     Returns:
         str: 格式化的策略列表信息，或错误信息
