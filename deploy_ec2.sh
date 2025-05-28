@@ -138,6 +138,10 @@ EOF
     # 设置环境变量
     export MCP_ENV="production"
     
+    # 确保charts目录存在
+    mkdir -p data/charts
+    chmod -R 755 data/charts
+    
     # 生成测试HTML文件
     python -c "
 import sys
@@ -147,6 +151,31 @@ url = generate_test_html()
 print(f'测试HTML文件已生成，URL: {url}')
 "
     
+    # 创建HTML服务器systemd服务
+    sudo bash -c "cat > /etc/systemd/system/html-server.service << EOF
+[Unit]
+Description=HTML Server
+After=network.target
+
+[Service]
+Type=simple
+User=$(whoami)
+WorkingDirectory=$(pwd)
+Environment=MCP_ENV=production
+ExecStart=$(pwd)/.venv/bin/python -m utils.html_server
+Restart=on-failure
+RestartSec=5s
+
+[Install]
+WantedBy=multi-user.target
+EOF"
+    
+    # 重新加载systemd配置
+    sudo systemctl daemon-reload
+    
+    # 启用服务
+    sudo systemctl enable html-server.service
+    
     echo -e "${GREEN}HTML服务器配置完成!${NC}"
 }
 
@@ -154,16 +183,47 @@ print(f'测试HTML文件已生成，URL: {url}')
 setup_nginx() {
     echo -e "${YELLOW}配置Nginx...${NC}"
     
+    # 创建Nginx配置文件
+    sudo bash -c "cat > /etc/nginx/sites-available/quant_mcp << EOF
+server {
+    listen 80;
+    server_name _;
+
+    location / {
+        proxy_pass http://127.0.0.1:$HTML_PORT;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+    }
+
+    location /charts/ {
+        alias $(pwd)/data/charts/;
+        autoindex on;
+    }
+}
+EOF"
+
+    # 创建符号链接到sites-enabled
+    sudo ln -sf /etc/nginx/sites-available/quant_mcp /etc/nginx/sites-enabled/quant_mcp
+    
+    # 测试Nginx配置
+    echo -e "${YELLOW}测试Nginx配置...${NC}"
+    sudo nginx -t
+    
     # 设置环境变量
     export MCP_ENV="production"
     
-    # 使用Python脚本生成Nginx配置
+    # 使用Python脚本生成Nginx配置（可选）
     python -c "
 import sys
 sys.path.append('.')
-from utils.html_server import setup_nginx
-success, message = setup_nginx()
-print(message)
+try:
+    from utils.html_server import setup_nginx
+    success, message = setup_nginx()
+    print(message)
+except Exception as e:
+    print(f'Python配置脚本遇到错误: {e}')
 "
     
     echo -e "${GREEN}Nginx配置完成!${NC}"
@@ -209,15 +269,33 @@ EOF"
 start_services() {
     echo -e "${YELLOW}启动服务...${NC}"
     
+    # 确保charts目录权限正确
+    chmod -R 755 data/charts
+    
     # 启动Nginx
-    sudo systemctl restart nginx
+    sudo systemctl restart nginx || echo -e "${YELLOW}Nginx启动失败，尝试修复配置...${NC}"
+    
+    # 如果Nginx启动失败，尝试修复
+    if ! systemctl is-active --quiet nginx; then
+        echo -e "${YELLOW}尝试修复Nginx配置...${NC}"
+        # 删除默认配置
+        sudo rm -f /etc/nginx/sites-enabled/default
+        # 重启Nginx
+        sudo systemctl restart nginx
+    fi
+    
+    # 启动HTML服务器
+    sudo systemctl start html-server.service
     
     # 启动MCP服务
-    sudo systemctl start mcp.service
+    sudo systemctl restart mcp.service
     
     # 检查服务状态
     echo -e "${YELLOW}Nginx状态:${NC}"
     sudo systemctl status nginx --no-pager
+    
+    echo -e "${YELLOW}HTML服务器状态:${NC}"
+    sudo systemctl status html-server.service --no-pager
     
     echo -e "${YELLOW}MCP服务状态:${NC}"
     sudo systemctl status mcp.service --no-pager
@@ -229,10 +307,24 @@ start_services() {
 show_service_info() {
     echo -e "${YELLOW}获取服务信息...${NC}"
     
-    # 获取EC2实例公网IP
-    PUBLIC_IP=$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4)
+    # 尝试从多个IP查询服务获取公网IP
+    echo -e "${YELLOW}正在从外部服务获取公网IP...${NC}"
+    PUBLIC_IP=$(curl -s ifconfig.me || curl -s ipinfo.io/ip || curl -s icanhazip.com)
+    
+    # 如果外部服务失败，尝试EC2元数据
+    if [ -z "$PUBLIC_IP" ]; then
+        echo -e "${YELLOW}外部服务获取IP失败，尝试EC2元数据...${NC}"
+        PUBLIC_IP=$(curl -s --connect-timeout 3 http://169.254.169.254/latest/meta-data/public-ipv4)
+    fi
+    
+    # 如果仍然失败，使用本地IP
+    if [ -z "$PUBLIC_IP" ]; then
+        echo -e "${YELLOW}无法获取公网IP，使用本地IP...${NC}"
+        PUBLIC_IP=$(hostname -I | awk '{print $1}')
+    fi
     
     echo -e "${GREEN}部署完成!${NC}"
+    echo -e "${GREEN}检测到的公网IP: $PUBLIC_IP${NC}"
     echo -e "${GREEN}MCP服务器地址: http://$PUBLIC_IP:$PORT${NC}"
     if [ "$TRANSPORT" == "sse" ]; then
         echo -e "${GREEN}MCP服务器SSE端点: http://$PUBLIC_IP:$PORT/sse${NC}"
@@ -241,6 +333,7 @@ show_service_info() {
     fi
     echo -e "${GREEN}HTML服务器地址: http://$PUBLIC_IP:$HTML_PORT${NC}"
     echo -e "${GREEN}测试HTML页面: http://$PUBLIC_IP:$HTML_PORT/charts/test.html${NC}"
+    echo -e "${GREEN}Nginx HTTP服务: http://$PUBLIC_IP/${NC}"
 }
 
 # 主函数
