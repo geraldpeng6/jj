@@ -289,6 +289,8 @@ server {
         proxy_set_header X-Real-IP \\\$remote_addr;
         proxy_set_header X-Forwarded-For \\\$proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto \\\$scheme;
+        proxy_set_header Upgrade \\\$http_upgrade;
+        proxy_set_header Connection "Upgrade";
     }
     
     # MCP SSE endpoint
@@ -303,6 +305,24 @@ server {
         proxy_cache off;
         proxy_read_timeout 86400s;
         chunked_transfer_encoding off;
+    }
+
+    # Generic pass-through for other API calls if MCP server handles them at root
+    # This will forward /path to http://127.0.0.1:$PORT/path
+    location ~ ^/messages/ {
+        proxy_pass http://127.0.0.1:$PORT;
+        proxy_set_header Host \\\$host;
+        proxy_set_header X-Real-IP \\\$remote_addr;
+        proxy_set_header X-Forwarded-For \\\$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \\\$scheme;
+    }
+
+    location ~ ^/(tool|resource|prompt|sampler)/ {
+        proxy_pass http://127.0.0.1:$PORT;
+        proxy_set_header Host \\\$host;
+        proxy_set_header X-Real-IP \\\$remote_addr;
+        proxy_set_header X-Forwarded-For \\\$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \\\$scheme;
     }
 }
 EOF"
