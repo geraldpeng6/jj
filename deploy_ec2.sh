@@ -82,7 +82,7 @@ if [[ "$TRANSPORT" != "stdio" && "$TRANSPORT" != "sse" && "$TRANSPORT" != "strea
     exit 1
 fi
 
-# 检查是否在项目根目录
+# 检查是否在项目根目录!
 if [ ! -f "server.py" ]; then
     echo -e "${RED}错误: 请在项目根目录运行此脚本${NC}"
     exit 1
