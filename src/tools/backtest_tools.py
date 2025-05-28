@@ -33,7 +33,8 @@ async def run_strategy_backtest(
     Args:
         strategy_id: 策略ID
         listen_time: 监听和处理时间（秒），默认180秒。对于大型回测请增加此值以避免客户端超时。
-                    此值应该比客户端的超时时间短5-10秒，以确保有足够时间处理结果和返回响应。
+                    注意：此值应该小于MCP客户端的超时时间（通常为60秒），否则会导致客户端超时错误。
+                    如果需要监听更长时间，建议设置为50秒以内，然后使用多次调用获取更多数据。
         start_date: 回测开始日期，格式为 "YYYY-MM-DD"，可选，默认为一年前
         end_date: 回测结束日期，格式为 "YYYY-MM-DD"，可选，默认为今天
         indicator: 自定义指标代码，可选
@@ -47,6 +48,11 @@ async def run_strategy_backtest(
     Returns:
         str: 回测结果信息，或错误信息
     """
+    # 检查listen_time是否超过安全值，如果超过则发出警告并自动调整
+    if listen_time > 50:
+        logger.warning(f"listen_time值({listen_time}秒)可能导致MCP客户端超时，自动调整为50秒")
+        listen_time = 50
+        
     try:
         # 检查策略ID
         if not strategy_id:

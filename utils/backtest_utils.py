@@ -1274,6 +1274,8 @@ def run_backtest(
         logger.info(f"开始监听position数据，将持续{listen_time}秒...")
         start_time = time.time()
         position_count = 0
+        no_new_data_count = 0
+        max_no_new_data_count = 5  # 如果连续5秒没有新数据，认为回测可能已经完成
 
         try:
             while time.time() - start_time < listen_time:
@@ -1282,6 +1284,14 @@ def run_backtest(
                 if current_count > position_count:
                     logger.info(f"收到{current_count - position_count}条新的position数据，总计: {current_count}条")
                     position_count = current_count
+                    no_new_data_count = 0  # 重置无新数据计数器
+                else:
+                    no_new_data_count += 1  # 增加无新数据计数器
+                
+                # 如果已经接收到足够的数据（至少10条）并且连续5秒没有新数据，可以提前结束
+                if position_count >= 10 and no_new_data_count >= max_no_new_data_count:
+                    logger.info(f"已接收到{position_count}条数据，且连续{no_new_data_count}秒无新数据，提前结束监听")
+                    break
 
                 # 每秒检查一次
                 time.sleep(1)
