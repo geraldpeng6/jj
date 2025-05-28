@@ -25,17 +25,20 @@ show_help() {
     echo "  -p, --port PORT           指定端口号 (默认: 8000)"
     echo "  --html-port PORT          指定HTML服务器端口号 (默认: 8081)"
     echo "  -r, --restart             仅重启服务，不执行完整部署"
+    echo "  -c, --clean               清理端口和进程，不执行部署"
     echo ""
     echo "示例:"
     echo "  $0                        # 使用默认设置部署 (SSE, 0.0.0.0:8000)"
     echo "  $0 -t streamable-http     # 使用Streamable HTTP传输协议部署"
     echo "  $0 -p 9000 --html-port 9001   # 在端口9000上部署MCP服务器，在端口9001上部署HTML服务器"
     echo "  $0 -r                     # 仅重启所有服务"
+    echo "  $0 -c                     # 仅清理端口和进程"
     exit 0
 }
 
 # 解析命令行参数
 RESTART_ONLY=false
+CLEAN_ONLY=false
 while [[ $# -gt 0 ]]; do
     case $1 in
         -h|--help)
@@ -59,6 +62,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         -r|--restart)
             RESTART_ONLY=true
+            shift
+            ;;
+        -c|--clean)
+            CLEAN_ONLY=true
             shift
             ;;
         *)
@@ -316,6 +323,86 @@ check_connections() {
     echo -e "   ${GREEN}cd $(pwd) && source .venv/bin/activate && python server.py --transport sse --host 0.0.0.0 --port $PORT${NC}"
 }
 
+# 检查并清理端口
+check_and_clean_ports() {
+    echo -e "${YELLOW}检查端口占用情况...${NC}"
+    
+    # 检查MCP端口
+    if sudo ss -tuln | grep ":$PORT " > /dev/null; then
+        echo -e "${RED}端口 $PORT 已被占用，尝试释放...${NC}"
+        
+        # 查找占用端口的进程
+        PID=$(sudo lsof -t -i:$PORT)
+        if [ -n "$PID" ]; then
+            echo -e "${YELLOW}找到占用端口 $PORT 的进程: $PID${NC}"
+            echo -e "${YELLOW}进程详情:${NC}"
+            ps -p $PID -o pid,user,cmd
+            
+            # 尝试停止服务
+            echo -e "${YELLOW}尝试停止MCP服务...${NC}"
+            sudo systemctl stop mcp.service
+            sleep 2
+            
+            # 如果进程仍然存在，强制终止
+            if kill -0 $PID 2>/dev/null; then
+                echo -e "${YELLOW}服务仍在运行，强制终止进程...${NC}"
+                sudo kill -9 $PID
+                sleep 1
+            fi
+        else
+            # 如果lsof找不到进程，尝试使用netstat
+            PID=$(sudo netstat -tulpn | grep ":$PORT " | awk '{print $7}' | cut -d'/' -f1)
+            if [ -n "$PID" ]; then
+                echo -e "${YELLOW}找到占用端口 $PORT 的进程: $PID${NC}"
+                sudo kill -9 $PID
+                sleep 1
+            else
+                echo -e "${RED}无法找到占用端口 $PORT 的进程，请手动检查${NC}"
+                echo -e "${YELLOW}尝试使用以下命令手动终止:${NC}"
+                echo -e "${YELLOW}sudo fuser -k $PORT/tcp${NC}"
+                sudo fuser -k $PORT/tcp
+                sleep 2
+            fi
+        fi
+    else
+        echo -e "${GREEN}端口 $PORT 未被占用，可以使用${NC}"
+    fi
+    
+    # 检查HTML端口
+    if sudo ss -tuln | grep ":$HTML_PORT " > /dev/null; then
+        echo -e "${RED}端口 $HTML_PORT 已被占用，尝试释放...${NC}"
+        
+        # 尝试停止HTML服务
+        echo -e "${YELLOW}尝试停止HTML服务...${NC}"
+        sudo systemctl stop html-server.service
+        sleep 2
+        
+        # 如果进程仍然存在，强制终止
+        PID=$(sudo lsof -t -i:$HTML_PORT)
+        if [ -n "$PID" ]; then
+            echo -e "${YELLOW}强制终止进程...${NC}"
+            sudo kill -9 $PID
+            sleep 1
+        else
+            echo -e "${YELLOW}使用fuser强制释放端口...${NC}"
+            sudo fuser -k $HTML_PORT/tcp
+            sleep 2
+        fi
+    else
+        echo -e "${GREEN}端口 $HTML_PORT 未被占用，可以使用${NC}"
+    fi
+    
+    # 再次检查端口
+    echo -e "${YELLOW}再次检查端口状态...${NC}"
+    if sudo ss -tuln | grep -E ":($PORT|$HTML_PORT) " > /dev/null; then
+        echo -e "${RED}端口仍然被占用，请手动检查并释放端口${NC}"
+        return 1
+    else
+        echo -e "${GREEN}所有端口已释放，可以继续部署${NC}"
+        return 0
+    fi
+}
+
 # 创建systemd服务
 create_systemd_service() {
     echo -e "${YELLOW}创建systemd服务...${NC}"
@@ -493,6 +580,12 @@ check_nginx_proxy() {
 start_services() {
     echo -e "${YELLOW}启动服务...${NC}"
     
+    # 先检查并清理端口
+    check_and_clean_ports || {
+        echo -e "${RED}无法释放所需端口，部署终止${NC}"
+        exit 1
+    }
+    
     # 确保charts目录权限正确
     chmod -R 755 data/charts
     
@@ -601,6 +694,9 @@ restart_services() {
         sudo pkill -f "python.*html_server"
     fi
     
+    # 检查并清理端口
+    check_and_clean_ports
+    
     # 启动服务
     echo -e "${YELLOW}启动服务...${NC}"
     sudo systemctl start nginx
@@ -624,9 +720,45 @@ restart_services() {
     echo -e "${GREEN}服务已重启!${NC}"
 }
 
+# 清理端口和进程
+clean_all() {
+    echo -e "${YELLOW}清理端口和进程...${NC}"
+    
+    # 停止服务
+    echo -e "${YELLOW}停止所有服务...${NC}"
+    sudo systemctl stop mcp.service html-server.service nginx
+    
+    # 等待服务停止
+    sleep 2
+    
+    # 终止所有相关进程
+    echo -e "${YELLOW}终止所有相关进程...${NC}"
+    sudo pkill -f "python.*server.py" || true
+    sudo pkill -f "python.*html_server" || true
+    
+    # 检查并清理端口
+    check_and_clean_ports
+    
+    echo -e "${GREEN}清理完成!${NC}"
+    
+    # 显示当前进程状态
+    echo -e "${YELLOW}当前进程状态:${NC}"
+    ps aux | grep -E "python.*server.py|python.*html_server" | grep -v grep
+    
+    # 显示当前端口状态
+    echo -e "${YELLOW}当前端口状态:${NC}"
+    sudo ss -tuln | grep -E "(80|$PORT|$HTML_PORT)"
+}
+
 # 主函数
 main() {
     echo -e "${YELLOW}开始在EC2实例上部署MCP服务器...${NC}"
+    
+    # 如果只是清理
+    if [ "$CLEAN_ONLY" = true ]; then
+        clean_all
+        exit 0
+    fi
     
     # 如果只是重启服务
     if [ "$RESTART_ONLY" = true ]; then
