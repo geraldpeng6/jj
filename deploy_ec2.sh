@@ -127,14 +127,23 @@ setup_venv() {
         echo -e "${GREEN}找到Uvicorn配置文件: $UVICORN_CONFIG_PATH${NC}"
         # 备份原始文件
         cp "$UVICORN_CONFIG_PATH" "${UVICORN_CONFIG_PATH}.bak"
-        # 替换默认host
-        sed -i -E "s/^(\s*host:\s*str\s*=\s*)\"127\.0\.0\.1\"/\1\"0.0.0.0\"/" "$UVICORN_CONFIG_PATH"
-        # 检查是否修改成功
-        if grep -q 'host: str = "0.0.0.0"' "$UVICORN_CONFIG_PATH"; then
+        # 替换默认host - 更通用的sed命令
+        sed -i -E "s/host:\s*str\s*=\s*\"127\.0\.0\.1\"/host: str = \"0.0.0.0\"/" "$UVICORN_CONFIG_PATH"
+        sed -i -E "s/host=\"127\.0\.0\.1\"/host=\"0.0.0.0\"/" "$UVICORN_CONFIG_PATH" # 针对其他可能的格式
+        
+        # 验证修改
+        echo -e "${YELLOW}验证Uvicorn配置修改:${NC}"
+        grep "host.*0\.0\.0\.0" "$UVICORN_CONFIG_PATH"
+        
+        if grep -q 'host: str = "0.0.0.0"' "$UVICORN_CONFIG_PATH" || grep -q 'host="0.0.0.0"' "$UVICORN_CONFIG_PATH"; then
             echo -e "${GREEN}成功修补Uvicorn配置文件，已将默认host更改为0.0.0.0${NC}"
         else
             echo -e "${RED}修补Uvicorn配置文件失败，默认host可能未更改${NC}"
-            echo -e "${YELLOW}请检查文件 $UVICORN_CONFIG_PATH 并手动修改 host: str = \"127.0.0.1\" 为 host: str = \"0.0.0.0\"${NC}"
+            echo -e "${YELLOW}原始内容:${NC}"
+            cat "${UVICORN_CONFIG_PATH}.bak" | grep "host"
+            echo -e "${YELLOW}修改后内容:${NC}"
+            cat "$UVICORN_CONFIG_PATH" | grep "host"
+            echo -e "${YELLOW}请检查文件 $UVICORN_CONFIG_PATH 并手动修改 host 为 0.0.0.0${NC}"
         fi
     else
         echo -e "${RED}未找到Uvicorn配置文件 (uvicorn/config.py)${NC}"
