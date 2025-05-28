@@ -202,6 +202,7 @@ server {
     listen 80;
     server_name _;
 
+    # HTML服务直接转发
     location / {
         proxy_pass http://127.0.0.1:$HTML_PORT;
         proxy_set_header Host \\\$host;
@@ -210,9 +211,33 @@ server {
         proxy_set_header X-Forwarded-Proto \\\$scheme;
     }
 
+    # 静态文件目录
     location /charts/ {
         alias $(pwd)/data/charts/;
         autoindex on;
+    }
+    
+    # MCP SSE服务反向代理
+    location /mcp/ {
+        proxy_pass http://127.0.0.1:$PORT/;
+        proxy_set_header Host \\\$host;
+        proxy_set_header X-Real-IP \\\$remote_addr;
+        proxy_set_header X-Forwarded-For \\\$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \\\$scheme;
+    }
+    
+    # MCP SSE endpoint
+    location /sse {
+        proxy_pass http://127.0.0.1:$PORT/sse;
+        proxy_http_version 1.1;
+        proxy_set_header Connection '';
+        proxy_set_header Host \\\$host;
+        proxy_set_header X-Real-IP \\\$remote_addr;
+        proxy_set_header X-Forwarded-For \\\$proxy_add_x_forwarded_for;
+        proxy_buffering off;
+        proxy_cache off;
+        proxy_read_timeout 86400s;
+        chunked_transfer_encoding off;
     }
 }
 EOF"
@@ -495,15 +520,22 @@ show_service_info() {
     
     echo -e "${GREEN}部署完成!${NC}"
     echo -e "${GREEN}检测到的公网IP: $PUBLIC_IP${NC}"
-    echo -e "${GREEN}MCP服务器地址: http://$PUBLIC_IP:$PORT${NC}"
-    if [ "$TRANSPORT" == "sse" ]; then
-        echo -e "${GREEN}MCP服务器SSE端点: http://$PUBLIC_IP:$PORT/sse${NC}"
-    elif [ "$TRANSPORT" == "streamable-http" ]; then
-        echo -e "${GREEN}MCP服务器HTTP端点: http://$PUBLIC_IP:$PORT/mcp${NC}"
-    fi
+    
+    # 直接访问MCP服务器（可能只能从本地访问）
+    echo -e "${YELLOW}MCP服务器直接地址 (仅限本地访问): http://127.0.0.1:$PORT${NC}"
+    echo -e "${YELLOW}MCP服务器SSE直接端点 (仅限本地访问): http://127.0.0.1:$PORT/sse${NC}"
+    
+    # 通过Nginx反向代理访问MCP服务器
+    echo -e "${GREEN}MCP服务器地址 (通过Nginx反向代理): http://$PUBLIC_IP/mcp/${NC}"
+    echo -e "${GREEN}MCP服务器SSE端点 (通过Nginx反向代理): http://$PUBLIC_IP/sse${NC}"
+    
+    # HTML服务器
     echo -e "${GREEN}HTML服务器地址: http://$PUBLIC_IP:$HTML_PORT${NC}"
-    echo -e "${GREEN}测试HTML页面: http://$PUBLIC_IP:$HTML_PORT/charts/test.html${NC}"
-    echo -e "${GREEN}Nginx HTTP服务: http://$PUBLIC_IP/${NC}"
+    echo -e "${GREEN}HTML服务器地址 (通过Nginx): http://$PUBLIC_IP/${NC}"
+    echo -e "${GREEN}测试HTML页面: http://$PUBLIC_IP/charts/test.html${NC}"
+    
+    echo -e "${YELLOW}注意: 如果直接访问MCP服务失败，请使用Nginx反向代理地址${NC}"
+    echo -e "${YELLOW}推荐使用: http://$PUBLIC_IP/sse 作为MCP服务的SSE端点${NC}"
 }
 
 # 主函数
