@@ -116,6 +116,10 @@ setup_html_server() {
     # 创建配置目录
     mkdir -p data/config
     
+    # 设置/home/ubuntu目录权限
+    sudo chmod 755 /home/ubuntu
+    echo -e "${GREEN}/home/ubuntu目录权限已设置为755${NC}"
+    
     # 创建HTML服务器配置文件
     if [ ! -f "data/config/html_server.json" ]; then
         cat > data/config/html_server.json << EOF
