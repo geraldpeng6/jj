@@ -125,6 +125,7 @@ setup_html_server() {
         cat > data/config/html_server.json << EOF
 {
     "server_port": $HTML_PORT,
+    "server_host": "0.0.0.0",
     "charts_dir": "data/charts",
     "use_ec2_metadata": true,
     "use_public_ip": true
@@ -132,7 +133,19 @@ setup_html_server() {
 EOF
         echo -e "${GREEN}HTML服务器配置文件已创建!${NC}"
     else
-        echo -e "${YELLOW}HTML服务器配置文件已存在，跳过创建${NC}"
+        echo -e "${YELLOW}HTML服务器配置文件已存在，正在更新...${NC}"
+        # 更新现有配置文件
+        mv data/config/html_server.json data/config/html_server.json.bak
+        cat > data/config/html_server.json << EOF
+{
+    "server_port": $HTML_PORT,
+    "server_host": "0.0.0.0", 
+    "charts_dir": "data/charts",
+    "use_ec2_metadata": true,
+    "use_public_ip": true
+}
+EOF
+        echo -e "${GREEN}HTML服务器配置文件已更新!${NC}"
     fi
     
     # 设置环境变量
@@ -191,10 +204,10 @@ server {
 
     location / {
         proxy_pass http://127.0.0.1:$HTML_PORT;
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_set_header Host \\\$host;
+        proxy_set_header X-Real-IP \\\$remote_addr;
+        proxy_set_header X-Forwarded-For \\\$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \\\$scheme;
     }
 
     location /charts/ {
@@ -247,7 +260,7 @@ Type=simple
 User=$(whoami)
 WorkingDirectory=$CURRENT_DIR
 Environment=MCP_ENV=production
-Environment=MCP_SERVER_HOST=
+Environment=MCP_SERVER_HOST=0.0.0.0
 ExecStart=$CURRENT_DIR/.venv/bin/python server.py --transport $TRANSPORT --host $HOST --port $PORT
 Restart=on-failure
 RestartSec=5s
@@ -263,6 +276,63 @@ EOF"
     sudo systemctl enable mcp.service
     
     echo -e "${GREEN}systemd服务创建完成!${NC}"
+}
+
+# 配置防火墙
+configure_firewall() {
+    echo -e "${YELLOW}配置防火墙规则...${NC}"
+    
+    # 检查ufw状态
+    if command -v ufw &> /dev/null; then
+        echo -e "${YELLOW}配置UFW防火墙...${NC}"
+        
+        # 允许SSH端口
+        sudo ufw allow ssh
+        
+        # 允许MCP端口
+        sudo ufw allow $PORT/tcp
+        
+        # 允许HTML服务器端口
+        sudo ufw allow $HTML_PORT/tcp
+        
+        # 允许HTTP端口
+        sudo ufw allow 80/tcp
+        
+        # 如果防火墙未启用，则启用它
+        if ! sudo ufw status | grep -q "Status: active"; then
+            echo -e "${YELLOW}启用UFW防火墙...${NC}"
+            echo "y" | sudo ufw enable
+        fi
+        
+        echo -e "${GREEN}UFW防火墙配置完成!${NC}"
+    elif command -v iptables &> /dev/null; then
+        echo -e "${YELLOW}配置iptables防火墙...${NC}"
+        
+        # 允许SSH端口
+        sudo iptables -A INPUT -p tcp --dport 22 -j ACCEPT
+        
+        # 允许MCP端口
+        sudo iptables -A INPUT -p tcp --dport $PORT -j ACCEPT
+        
+        # 允许HTML服务器端口
+        sudo iptables -A INPUT -p tcp --dport $HTML_PORT -j ACCEPT
+        
+        # 允许HTTP端口
+        sudo iptables -A INPUT -p tcp --dport 80 -j ACCEPT
+        
+        # 保存规则
+        if command -v netfilter-persistent &> /dev/null; then
+            sudo netfilter-persistent save
+            echo -e "${GREEN}已保存iptables规则!${NC}"
+        else
+            echo -e "${YELLOW}未找到netfilter-persistent，规则可能不会在重启后保留${NC}"
+            echo -e "${YELLOW}请考虑安装: sudo apt-get install iptables-persistent${NC}"
+        fi
+        
+        echo -e "${GREEN}iptables防火墙配置完成!${NC}"
+    else
+        echo -e "${YELLOW}未找到支持的防火墙工具，跳过防火墙配置${NC}"
+    fi
 }
 
 # 启动服务
@@ -354,6 +424,9 @@ main() {
     
     # 创建systemd服务
     create_systemd_service
+    
+    # 配置防火墙
+    configure_firewall
     
     # 启动服务
     start_services
