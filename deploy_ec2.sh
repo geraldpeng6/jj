@@ -109,6 +109,93 @@ setup_venv() {
     echo -e "${GREEN}Python虚拟环境设置完成!${NC}"
 }
 
+# 修复MCP库绑定问题
+fix_mcp_binding() {
+    echo -e "${YELLOW}直接修改MCP库文件修复绑定问题...${NC}"
+    
+    # 获取虚拟环境路径
+    VENV_PATH=".venv"
+    MCP_PATH=$(find $VENV_PATH -path "*/site-packages/mcp" -type d | head -n 1)
+    
+    if [ -z "$MCP_PATH" ]; then
+        echo -e "${RED}未找到MCP库路径!${NC}"
+        return 1
+    fi
+    
+    echo -e "${YELLOW}找到MCP库路径: $MCP_PATH${NC}"
+    
+    # 修改SSE服务器文件
+    SSE_FILE=$(find $MCP_PATH -name "sse.py" -type f | head -n 1)
+    if [ -n "$SSE_FILE" ]; then
+        echo -e "${YELLOW}修改SSE服务器文件: $SSE_FILE${NC}"
+        
+        # 备份原始文件
+        cp $SSE_FILE ${SSE_FILE}.bak
+        
+        # 修改host绑定
+        sed -i 's/host="127.0.0.1"/host="0.0.0.0"/g' $SSE_FILE
+        sed -i 's/host = "127.0.0.1"/host = "0.0.0.0"/g' $SSE_FILE
+        sed -i 's/host: str = "127.0.0.1"/host: str = "0.0.0.0"/g' $SSE_FILE
+        
+        echo -e "${GREEN}SSE服务器文件已修改!${NC}"
+    else
+        echo -e "${YELLOW}未找到SSE服务器文件!${NC}"
+    fi
+    
+    # 修改HTTP服务器文件
+    HTTP_FILE=$(find $MCP_PATH -name "http.py" -type f | head -n 1)
+    if [ -n "$HTTP_FILE" ]; then
+        echo -e "${YELLOW}修改HTTP服务器文件: $HTTP_FILE${NC}"
+        
+        # 备份原始文件
+        cp $HTTP_FILE ${HTTP_FILE}.bak
+        
+        # 修改host绑定
+        sed -i 's/host="127.0.0.1"/host="0.0.0.0"/g' $HTTP_FILE
+        sed -i 's/host = "127.0.0.1"/host = "0.0.0.0"/g' $HTTP_FILE
+        sed -i 's/host: str = "127.0.0.1"/host: str = "0.0.0.0"/g' $HTTP_FILE
+        
+        echo -e "${GREEN}HTTP服务器文件已修改!${NC}"
+    else
+        echo -e "${YELLOW}未找到HTTP服务器文件!${NC}"
+    fi
+    
+    # 修改fastmcp文件
+    FASTMCP_FILE=$(find $MCP_PATH -name "fastmcp.py" -type f | head -n 1)
+    if [ -n "$FASTMCP_FILE" ]; then
+        echo -e "${YELLOW}修改FastMCP文件: $FASTMCP_FILE${NC}"
+        
+        # 备份原始文件
+        cp $FASTMCP_FILE ${FASTMCP_FILE}.bak
+        
+        # 修改host绑定
+        sed -i 's/host="127.0.0.1"/host="0.0.0.0"/g' $FASTMCP_FILE
+        sed -i 's/host = "127.0.0.1"/host = "0.0.0.0"/g' $FASTMCP_FILE
+        sed -i 's/host: str = "127.0.0.1"/host: str = "0.0.0.0"/g' $FASTMCP_FILE
+        
+        echo -e "${GREEN}FastMCP文件已修改!${NC}"
+    else
+        echo -e "${YELLOW}未找到FastMCP文件!${NC}"
+    fi
+    
+    # 尝试修复uvicorn配置
+    for UVICORN_FILE in $(find $VENV_PATH -path "*/uvicorn" -name "*.py" | grep -E "config|server"); do
+        if [ -n "$UVICORN_FILE" ]; then
+            echo -e "${YELLOW}修改Uvicorn文件: $UVICORN_FILE${NC}"
+            
+            # 备份原始文件
+            cp $UVICORN_FILE ${UVICORN_FILE}.bak
+            
+            # 修改host绑定
+            sed -i 's/host="127.0.0.1"/host="0.0.0.0"/g' $UVICORN_FILE
+            sed -i 's/host = "127.0.0.1"/host = "0.0.0.0"/g' $UVICORN_FILE
+            sed -i 's/host: str = "127.0.0.1"/host: str = "0.0.0.0"/g' $UVICORN_FILE
+        fi
+    done
+    
+    echo -e "${GREEN}MCP库文件修改完成!${NC}"
+}
+
 # 配置HTML服务器
 setup_html_server() {
     echo -e "${YELLOW}配置HTML服务器...${NC}"
@@ -302,7 +389,14 @@ Type=simple
 User=$(whoami)
 WorkingDirectory=$CURRENT_DIR
 Environment=MCP_ENV=production
-ExecStart=$CURRENT_DIR/.venv/bin/python server.py --transport $TRANSPORT --host 0.0.0.0 --port $PORT
+Environment=MCP_SERVER_HOST=0.0.0.0
+Environment=MCP_SSE_HOST=0.0.0.0
+Environment=MCP_HTTP_HOST=0.0.0.0
+Environment=MCP_BIND=0.0.0.0
+Environment=UVICORN_HOST=0.0.0.0
+Environment=STARLETTE_HOST=0.0.0.0
+Environment=HOST=0.0.0.0
+ExecStart=/bin/bash -c 'cd $CURRENT_DIR && source .venv/bin/activate && python server.py --transport $TRANSPORT --host 0.0.0.0 --port $PORT --bind 0.0.0.0'
 Restart=on-failure
 RestartSec=5s
 
@@ -491,6 +585,9 @@ main() {
     
     # 设置虚拟环境
     setup_venv
+    
+    # 修复MCP库绑定问题
+    fix_mcp_binding
     
     # 配置HTML服务器
     setup_html_server
