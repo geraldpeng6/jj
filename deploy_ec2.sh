@@ -139,11 +139,12 @@ setup_venv() {
 
     # 强制修改sse-starlette的Uvicorn调用
     echo -e "${YELLOW}尝试修补sse-starlette的Uvicorn调用...${NC}"
-    SSE_STARLETTE_DIR=$(find .venv/lib/python*/site-packages/ -maxdepth 1 -type d -name "*sse_starlette*" -print -quit 2>/dev/null)
-    if [ -n "$SSE_STARLETTE_DIR" ] && [ -d "$SSE_STARLETTE_DIR" ]; then
-        echo -e "${GREEN}找到sse-starlette目录: $SSE_STARLETTE_DIR${NC}"
-        # 查找可能调用uvicorn.run的文件，通常是server.py或类似名称
-        TARGET_FILES=$(find "$SSE_STARLETTE_DIR" -type f -name "*.py" -print0 | xargs -0 grep -lE 'uvicorn\.run|uvicorn\.Config' 2>/dev/null)
+    # Correctly find the sse_starlette source directory, not the .dist-info directory
+    SSE_STARLETTE_SRC_DIR=$(find .venv/lib/python*/site-packages/ -maxdepth 1 -type d -name "sse_starlette" -print -quit 2>/dev/null)
+    
+    if [ -n "$SSE_STARLETTE_SRC_DIR" ] && [ -d "$SSE_STARLETTE_SRC_DIR" ]; then
+        echo -e "${GREEN}找到sse-starlette源码目录: $SSE_STARLETTE_SRC_DIR${NC}"
+        TARGET_FILES=$(find "$SSE_STARLETTE_SRC_DIR" -type f -name "*.py" -print0 | xargs -0 grep -lE 'uvicorn\.run|uvicorn\.Config' 2>/dev/null)
         if [ -n "$TARGET_FILES" ]; then
             echo -e "${GREEN}在sse-starlette中找到以下可能设置Uvicorn host的文件:${NC}"
             echo "$TARGET_FILES"
@@ -151,21 +152,23 @@ setup_venv() {
                 if [ -f "$FILE_TO_PATCH" ]; then
                     echo -e "${YELLOW}正在修补文件: $FILE_TO_PATCH${NC}"
                     cp "$FILE_TO_PATCH" "${FILE_TO_PATCH}.bak"
-                    # 尝试替换 host='127.0.0.1' 或 host="127.0.0.1"
                     sed -i -E "s/host=(['\"])127\.0\.0\.1\1/host=\10.0.0.0\1/g" "$FILE_TO_PATCH"
-                    # 验证修改
+                    # 进一步尝试替换 uvicorn.Config(..., host="127.0.0.1", ...) 等模式
+                    sed -i -E "s/(uvicorn\.Config\(.*)host=(['\"])127\.0\.0\.1\2(.*?\))/\1host=\20.0.0.0\2\3/g" "$FILE_TO_PATCH"
+                    sed -i -E "s/(uvicorn\.run\(.*)host=(['\"])127\.0\.0\.1\2(.*?\))/\1host=\20.0.0.0\2\3/g" "$FILE_TO_PATCH"
                     if grep -qE "host=(['\"])0\.0\.0\.0\1" "$FILE_TO_PATCH"; then
                         echo -e "${GREEN}成功修补 $FILE_TO_PATCH，已将uvicorn host调用更改为0.0.0.0${NC}"
                     else
                         echo -e "${RED}修补 $FILE_TO_PATCH 失败或未找到明确的127.0.0.1 host设置${NC}"
+                        echo -e "${YELLOW}请检查 $FILE_TO_PATCH 并手动确认。${NC}"
                     fi
                 fi
             done
         else
-            echo -e "${YELLOW}在sse-starlette中未找到直接调用uvicorn.run或Config的文件。${NC}"
+            echo -e "${YELLOW}在sse-starlette源码中未找到直接调用uvicorn.run或Config的文件。${NC}"
         fi
     else
-        echo -e "${RED}未找到sse-starlette包目录。${NC}"
+        echo -e "${RED}未找到sse-starlette源码包目录。${NC}"
     fi
     
     echo -e "${GREEN}Python虚拟环境设置完成!${NC}"
