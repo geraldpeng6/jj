@@ -120,6 +120,27 @@ setup_venv() {
     # 安装依赖
     pip install -r requirements.txt
     
+    # 强制修改Uvicorn默认绑定地址
+    echo -e "${YELLOW}尝试修补Uvicorn的默认主机绑定...${NC}"
+    UVICORN_CONFIG_PATH=$(find .venv -name "config.py" -path "*/uvicorn/config.py")
+    if [ -n "$UVICORN_CONFIG_PATH" ] && [ -f "$UVICORN_CONFIG_PATH" ]; then
+        echo -e "${GREEN}找到Uvicorn配置文件: $UVICORN_CONFIG_PATH${NC}"
+        # 备份原始文件
+        cp "$UVICORN_CONFIG_PATH" "${UVICORN_CONFIG_PATH}.bak"
+        # 替换默认host
+        sed -i -E "s/^(\s*host:\s*str\s*=\s*)\"127\.0\.0\.1\"/\1\"0.0.0.0\"/" "$UVICORN_CONFIG_PATH"
+        # 检查是否修改成功
+        if grep -q 'host: str = "0.0.0.0"' "$UVICORN_CONFIG_PATH"; then
+            echo -e "${GREEN}成功修补Uvicorn配置文件，已将默认host更改为0.0.0.0${NC}"
+        else
+            echo -e "${RED}修补Uvicorn配置文件失败，默认host可能未更改${NC}"
+            echo -e "${YELLOW}请检查文件 $UVICORN_CONFIG_PATH 并手动修改 host: str = \"127.0.0.1\" 为 host: str = \"0.0.0.0\"${NC}"
+        fi
+    else
+        echo -e "${RED}未找到Uvicorn配置文件 (uvicorn/config.py)${NC}"
+        echo -e "${YELLOW}如果MCP服务器仍然绑定到127.0.0.1，可能需要手动修改Uvicorn库文件${NC}"
+    fi
+    
     echo -e "${GREEN}Python虚拟环境设置完成!${NC}"
 }
 
