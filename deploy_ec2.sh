@@ -24,15 +24,18 @@ show_help() {
     echo "  -H, --host HOST           指定主机地址 (默认: 0.0.0.0)"
     echo "  -p, --port PORT           指定端口号 (默认: 8000)"
     echo "  --html-port PORT          指定HTML服务器端口号 (默认: 8081)"
+    echo "  -r, --restart             仅重启服务，不执行完整部署"
     echo ""
     echo "示例:"
     echo "  $0                        # 使用默认设置部署 (SSE, 0.0.0.0:8000)"
     echo "  $0 -t streamable-http     # 使用Streamable HTTP传输协议部署"
     echo "  $0 -p 9000 --html-port 9001   # 在端口9000上部署MCP服务器，在端口9001上部署HTML服务器"
+    echo "  $0 -r                     # 仅重启所有服务"
     exit 0
 }
 
 # 解析命令行参数
+RESTART_ONLY=false
 while [[ $# -gt 0 ]]; do
     case $1 in
         -h|--help)
@@ -53,6 +56,10 @@ while [[ $# -gt 0 ]]; do
         --html-port)
             HTML_PORT="$2"
             shift 2
+            ;;
+        -r|--restart)
+            RESTART_ONLY=true
+            shift
             ;;
         *)
             echo -e "${RED}错误: 未知选项 $1${NC}"
@@ -448,6 +455,40 @@ configure_firewall() {
     fi
 }
 
+# 检查Nginx代理配置
+check_nginx_proxy() {
+    echo -e "${YELLOW}检查Nginx反向代理配置...${NC}"
+    
+    # 获取公网IP
+    PUBLIC_IP=$(curl -s ifconfig.me || curl -s ipinfo.io/ip || curl -s icanhazip.com)
+    
+    # 检查Nginx配置
+    echo -e "${YELLOW}Nginx配置状态:${NC}"
+    sudo nginx -t
+    
+    # 检查Nginx服务状态
+    echo -e "${YELLOW}Nginx服务状态:${NC}"
+    sudo systemctl status nginx --no-pager
+    
+    # 测试Nginx代理连接
+    echo -e "${YELLOW}测试Nginx代理连接...${NC}"
+    echo -e "${YELLOW}HTML服务测试:${NC}"
+    curl -s -I "http://localhost/" | head -n 1
+    
+    echo -e "${YELLOW}MCP服务测试:${NC}"
+    curl -s -I "http://localhost/mcp/" | head -n 1
+    
+    # 提供测试命令
+    echo -e "${GREEN}要测试外部访问，请在其他机器上运行:${NC}"
+    echo -e "${GREEN}curl -v http://$PUBLIC_IP/sse${NC}"
+    
+    # 检查端口监听情况
+    echo -e "${YELLOW}端口监听情况:${NC}"
+    sudo ss -tuln | grep -E "(80|$PORT|$HTML_PORT)"
+    
+    echo -e "${GREEN}Nginx反向代理检查完成!${NC}"
+}
+
 # 启动服务
 start_services() {
     echo -e "${YELLOW}启动服务...${NC}"
@@ -538,9 +579,62 @@ show_service_info() {
     echo -e "${YELLOW}推荐使用: http://$PUBLIC_IP/sse 作为MCP服务的SSE端点${NC}"
 }
 
+# 重启服务
+restart_services() {
+    echo -e "${YELLOW}重启所有服务...${NC}"
+    
+    # 停止服务
+    echo -e "${YELLOW}停止服务...${NC}"
+    sudo systemctl stop mcp.service html-server.service nginx
+    
+    # 等待服务停止
+    sleep 2
+    
+    # 检查是否有残留进程
+    if pgrep -f "python.*server.py" > /dev/null; then
+        echo -e "${YELLOW}发现残留的MCP服务进程，正在终止...${NC}"
+        sudo pkill -f "python.*server.py"
+    fi
+    
+    if pgrep -f "python.*html_server" > /dev/null; then
+        echo -e "${YELLOW}发现残留的HTML服务进程，正在终止...${NC}"
+        sudo pkill -f "python.*html_server"
+    fi
+    
+    # 启动服务
+    echo -e "${YELLOW}启动服务...${NC}"
+    sudo systemctl start nginx
+    sudo systemctl start html-server.service
+    sudo systemctl start mcp.service
+    
+    # 检查服务状态
+    echo -e "${YELLOW}Nginx状态:${NC}"
+    sudo systemctl status nginx --no-pager
+    
+    echo -e "${YELLOW}HTML服务器状态:${NC}"
+    sudo systemctl status html-server.service --no-pager
+    
+    echo -e "${YELLOW}MCP服务状态:${NC}"
+    sudo systemctl status mcp.service --no-pager
+    
+    # 检查端口
+    echo -e "${YELLOW}检查端口...${NC}"
+    sudo ss -tuln | grep -E "(80|$PORT|$HTML_PORT)"
+    
+    echo -e "${GREEN}服务已重启!${NC}"
+}
+
 # 主函数
 main() {
     echo -e "${YELLOW}开始在EC2实例上部署MCP服务器...${NC}"
+    
+    # 如果只是重启服务
+    if [ "$RESTART_ONLY" = true ]; then
+        restart_services
+        check_nginx_proxy
+        show_service_info
+        exit 0
+    fi
     
     # 安装系统依赖
     install_system_deps
@@ -565,6 +659,9 @@ main() {
     
     # 检查连接
     check_connections
+    
+    # 检查Nginx代理
+    check_nginx_proxy
     
     # 显示服务信息
     show_service_info
