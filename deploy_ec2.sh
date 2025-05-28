@@ -242,6 +242,48 @@ except Exception as e:
     echo -e "${GREEN}Nginx配置完成!${NC}"
 }
 
+# 检查端口连接
+check_connections() {
+    echo -e "${YELLOW}检查服务连接情况...${NC}"
+    
+    # 获取公网IP
+    PUBLIC_IP=$(curl -s ifconfig.me || curl -s ipinfo.io/ip || curl -s icanhazip.com)
+    
+    # 查看端口绑定
+    echo -e "${YELLOW}查看MCP进程:${NC}"
+    pgrep -f "python.*server.py" | xargs -I{} ps -p {} -o pid,cmd
+    
+    echo -e "${YELLOW}MCP服务器绑定地址:${NC}"
+    sudo ss -tuln | grep $PORT
+    
+    echo -e "${YELLOW}HTML服务器绑定地址:${NC}"
+    sudo ss -tuln | grep $HTML_PORT
+    
+    # 检查MCP服务连接
+    echo -e "${YELLOW}检查MCP服务内部连接...${NC}"
+    curl -v "http://127.0.0.1:$PORT/sse" 2>&1 | grep "< HTTP"
+    
+    # 检查HTML服务连接
+    echo -e "${YELLOW}检查HTML服务内部连接...${NC}"
+    curl -v "http://127.0.0.1:$HTML_PORT" 2>&1 | grep "< HTTP"
+    
+    # 输出iptables防火墙规则
+    echo -e "${YELLOW}当前iptables规则:${NC}"
+    sudo iptables -L INPUT | grep -E "(ACCEPT|$PORT|$HTML_PORT|80)"
+    
+    # 检查服务器上的监听进程
+    echo -e "${YELLOW}检查端口监听:${NC}"
+    sudo netstat -tulpn | grep -E "($PORT|$HTML_PORT)"
+    
+    # 提供调试信息
+    echo -e "${YELLOW}如果外部连接失败，请尝试:${NC}"
+    echo -e "1. ${GREEN}检查EC2安全组是否开放端口 $PORT 和 $HTML_PORT${NC}"
+    echo -e "2. ${GREEN}检查服务器防火墙: sudo ufw status${NC}"
+    echo -e "3. ${GREEN}测试连接: curl -v http://$PUBLIC_IP:$PORT/sse${NC}"
+    echo -e "4. ${GREEN}手动启动MCP服务 (临时测试): ${NC}"
+    echo -e "   ${GREEN}cd $(pwd) && source .venv/bin/activate && python server.py --transport sse --host 0.0.0.0 --port $PORT${NC}"
+}
+
 # 创建systemd服务
 create_systemd_service() {
     echo -e "${YELLOW}创建systemd服务...${NC}"
@@ -260,8 +302,7 @@ Type=simple
 User=$(whoami)
 WorkingDirectory=$CURRENT_DIR
 Environment=MCP_ENV=production
-Environment=MCP_SERVER_HOST=0.0.0.0
-ExecStart=$CURRENT_DIR/.venv/bin/python server.py --transport $TRANSPORT --host $HOST --port $PORT
+ExecStart=$CURRENT_DIR/.venv/bin/python server.py --transport $TRANSPORT --host 0.0.0.0 --port $PORT
 Restart=on-failure
 RestartSec=5s
 
@@ -276,6 +317,29 @@ EOF"
     sudo systemctl enable mcp.service
     
     echo -e "${GREEN}systemd服务创建完成!${NC}"
+    
+    # 手动测试服务器
+    echo -e "${YELLOW}执行手动测试...${NC}"
+    cd $CURRENT_DIR
+    source .venv/bin/activate
+    python -c "
+import socket
+s = socket.socket(socket.AF_INET, socket.SOCK_STREAM) 
+try:
+    s.bind(('0.0.0.0', $PORT))
+    print('端口 $PORT 可绑定，可用')
+    s.close()
+except Exception as e:
+    print(f'端口 $PORT 测试失败: {e}')
+
+try:
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.connect(('127.0.0.1', $PORT))
+    print('端口 $PORT 已被占用 (连接成功)')
+    s.close()
+except:
+    print('端口 $PORT 未被占用 (连接失败)')
+"
 }
 
 # 配置防火墙
@@ -360,6 +424,10 @@ start_services() {
     # 启动MCP服务
     sudo systemctl restart mcp.service
     
+    # 等待服务启动完成
+    echo -e "${YELLOW}等待服务启动完成...${NC}"
+    sleep 3
+    
     # 检查服务状态
     echo -e "${YELLOW}Nginx状态:${NC}"
     sudo systemctl status nginx --no-pager
@@ -369,6 +437,14 @@ start_services() {
     
     echo -e "${YELLOW}MCP服务状态:${NC}"
     sudo systemctl status mcp.service --no-pager
+    
+    # 检查网络连接
+    echo -e "${YELLOW}检查网络连接...${NC}"
+    echo -e "${YELLOW}MCP服务器绑定地址:${NC}"
+    sudo ss -tuln | grep $PORT
+    
+    echo -e "${YELLOW}HTML服务器绑定地址:${NC}"
+    sudo ss -tuln | grep $HTML_PORT
     
     echo -e "${GREEN}服务已启动!${NC}"
 }
@@ -430,6 +506,9 @@ main() {
     
     # 启动服务
     start_services
+    
+    # 检查连接
+    check_connections
     
     # 显示服务信息
     show_service_info
