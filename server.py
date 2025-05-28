@@ -43,7 +43,7 @@ def create_server(name: str = "量化交易助手") -> FastMCP:
 
     return mcp
 
-def run_server(transport: str = 'stdio', host: str = '0.0.0.0', port: int = 8000):
+def run_server(transport: str = 'stdio', host: str = '0.0.0.0', port: int = 8000, timeout: int = 300):
     """
     运行MCP服务器
 
@@ -51,8 +51,26 @@ def run_server(transport: str = 'stdio', host: str = '0.0.0.0', port: int = 8000
         transport: 传输协议，默认为stdio，支持 'stdio', 'sse', 'streamable-http'
         host: 主机地址，当使用 'sse' 或 'streamable-http' 传输协议时有效
         port: 端口号，当使用 'sse' 或 'streamable-http' 传输协议时有效
+        timeout: 服务器超时时间（秒），默认300秒（5分钟）
     """
     try:
+        # 设置环境变量，确保主机绑定为0.0.0.0
+        os.environ['MCP_SERVER_HOST'] = host
+        os.environ['MCP_SSE_HOST'] = host
+        os.environ['MCP_HTTP_HOST'] = host
+        
+        # 设置Uvicorn超时
+        os.environ['UVICORN_TIMEOUT_KEEP_ALIVE'] = str(timeout)
+        
+        # 设置MCP超时
+        os.environ['MCP_REQUEST_TIMEOUT'] = str(timeout)
+        
+        # 设置更详细的日志
+        logger.info(f"服务器配置: 传输协议={transport}, 主机={host}, 端口={port}, 超时={timeout}秒")
+        logger.info(f"环境变量: MCP_SERVER_HOST={os.environ.get('MCP_SERVER_HOST')}, "
+                   f"MCP_SSE_HOST={os.environ.get('MCP_SSE_HOST')}, "
+                   f"MCP_HTTP_HOST={os.environ.get('MCP_HTTP_HOST')}")
+
         # 确保必要的目录存在
         os.makedirs('data/logs', exist_ok=True)
         os.makedirs('data/klines', exist_ok=True)
@@ -99,8 +117,8 @@ def run_server(transport: str = 'stdio', host: str = '0.0.0.0', port: int = 8000
         if transport == 'stdio':
             mcp.run(transport=transport)
         elif transport == 'sse':
-            print(f"SSE服务器将在 http://{host}:{port}/sse 上运行")
-            logger.info(f"SSE服务器将在 http://{host}:{port}/sse 上运行")
+            print(f"SSE服务器将在 http://{host}:{port}/sse 上运行，超时时间: {timeout}秒")
+            logger.info(f"SSE服务器将在 http://{host}:{port}/sse 上运行，超时时间: {timeout}秒")
 
             run_params = inspect.signature(mcp.run).parameters
             print(f"Debug - Host: {host}, Port: {port}, Env MCP_SSE_HOST: {os.environ.get('MCP_SSE_HOST')}")
@@ -109,7 +127,10 @@ def run_server(transport: str = 'stdio', host: str = '0.0.0.0', port: int = 8000
             if 'host' in run_params and 'port' in run_params:
                 print(f"使用新版本API: mcp.run(transport='{transport}', host='{host}', port={port})")
                 logger.info(f"使用新版本API: mcp.run(transport='{transport}', host='{host}', port={port})")
-                mcp.run(transport=transport, host=host, port=port)
+                if 'timeout' in run_params:
+                    mcp.run(transport=transport, host=host, port=port, timeout=timeout)
+                else:
+                    mcp.run(transport=transport, host=host, port=port)
             else:
                 print(f"使用旧版本API: mcp.run(transport='{transport}')")
                 logger.info(f"使用旧版本API: mcp.run(transport='{transport}')")
@@ -118,8 +139,8 @@ def run_server(transport: str = 'stdio', host: str = '0.0.0.0', port: int = 8000
                 mcp.run(transport=transport)
 
         elif transport == 'streamable-http':
-            print(f"Streamable HTTP服务器将在 http://{host}:{port}/mcp 上运行")
-            logger.info(f"Streamable HTTP服务器将在 http://{host}:{port}/mcp 上运行")
+            print(f"Streamable HTTP服务器将在 http://{host}:{port}/mcp 上运行，超时时间: {timeout}秒")
+            logger.info(f"Streamable HTTP服务器将在 http://{host}:{port}/mcp 上运行，超时时间: {timeout}秒")
 
             run_params = inspect.signature(mcp.run).parameters
             print(f"Debug - Host: {host}, Port: {port}, Env MCP_HTTP_HOST: {os.environ.get('MCP_HTTP_HOST')}")
@@ -128,7 +149,10 @@ def run_server(transport: str = 'stdio', host: str = '0.0.0.0', port: int = 8000
             if 'host' in run_params and 'port' in run_params and 'path' in run_params:
                 print(f"使用新版本API: mcp.run(transport='{transport}', host='{host}', port={port}, path='/mcp')")
                 logger.info(f"使用新版本API: mcp.run(transport='{transport}', host='{host}', port={port}, path='/mcp')")
-                mcp.run(transport=transport, host=host, port=port, path='/mcp')
+                if 'timeout' in run_params:
+                    mcp.run(transport=transport, host=host, port=port, path='/mcp', timeout=timeout)
+                else:
+                    mcp.run(transport=transport, host=host, port=port, path='/mcp')
             else:
                 print(f"使用旧版本API: mcp.run(transport='{transport}')")
                 logger.info(f"使用旧版本API: mcp.run(transport='{transport}')")
@@ -154,6 +178,8 @@ if __name__ == "__main__":
                         help='主机地址，当使用 sse 或 streamable-http 传输协议时有效')
     parser.add_argument('--port', '-p', type=int, default=8000,
                         help='端口号，当使用 sse 或 streamable-http 传输协议时有效')
+    parser.add_argument('--timeout', '-T', type=int, default=300,
+                        help='服务器超时时间（秒），默认300秒（5分钟）')
 
     args = parser.parse_args()
-    run_server(transport=args.transport, host=args.host, port=args.port)
+    run_server(transport=args.transport, host=args.host, port=args.port, timeout=args.timeout)

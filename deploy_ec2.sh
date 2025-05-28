@@ -14,6 +14,7 @@ TRANSPORT="sse"  # 默认使用SSE传输协议
 HOST="0.0.0.0"
 PORT=8000
 HTML_PORT=8081
+TIMEOUT=300  # 默认5分钟超时
 
 # 显示帮助信息
 show_help() {
@@ -24,6 +25,7 @@ show_help() {
     echo "  -H, --host HOST           指定主机地址 (默认: 0.0.0.0)"
     echo "  -p, --port PORT           指定端口号 (默认: 8000)"
     echo "  --html-port PORT          指定HTML服务器端口号 (默认: 8081)"
+    echo "  -T, --timeout TIMEOUT     指定服务器超时时间（秒）(默认: 300)"
     echo "  -r, --restart             仅重启服务，不执行完整部署"
     echo "  -c, --clean               清理端口和进程，不执行部署"
     echo ""
@@ -31,6 +33,7 @@ show_help() {
     echo "  $0                        # 使用默认设置部署 (SSE, 0.0.0.0:8000)"
     echo "  $0 -t streamable-http     # 使用Streamable HTTP传输协议部署"
     echo "  $0 -p 9000 --html-port 9001   # 在端口9000上部署MCP服务器，在端口9001上部署HTML服务器"
+    echo "  $0 -T 600                 # 设置服务器超时为600秒（10分钟）"
     echo "  $0 -r                     # 仅重启所有服务"
     echo "  $0 -c                     # 仅清理端口和进程"
     exit 0
@@ -58,6 +61,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --html-port)
             HTML_PORT="$2"
+            shift 2
+            ;;
+        -T|--timeout)
+            TIMEOUT="$2"
             shift 2
             ;;
         -r|--restart)
@@ -490,11 +497,13 @@ export MCP_HTTP_HOST=0.0.0.0
 export PYTHONPATH=$CURRENT_DIR
 export UVICORN_HOST=0.0.0.0
 export HOST=0.0.0.0
+export UVICORN_TIMEOUT_KEEP_ALIVE=$TIMEOUT
+export MCP_REQUEST_TIMEOUT=$TIMEOUT
 
 cd $CURRENT_DIR
 source .venv/bin/activate
-echo "启动MCP服务器: $TRANSPORT $HOST $PORT"
-exec python server.py --transport $TRANSPORT --host 0.0.0.0 --port $PORT
+echo "启动MCP服务器: $TRANSPORT $HOST $PORT (超时: ${TIMEOUT}秒)"
+exec python server.py --transport $TRANSPORT --host $HOST --port $PORT --timeout $TIMEOUT
 EOF
 
     # 给启动脚本添加执行权限
@@ -516,6 +525,8 @@ Environment=MCP_SSE_HOST=0.0.0.0
 Environment=MCP_HTTP_HOST=0.0.0.0
 Environment=UVICORN_HOST=0.0.0.0
 Environment=HOST=0.0.0.0
+Environment=UVICORN_TIMEOUT_KEEP_ALIVE=$TIMEOUT
+Environment=MCP_REQUEST_TIMEOUT=$TIMEOUT
 ExecStart=$CURRENT_DIR/start_mcp.sh
 Restart=on-failure
 RestartSec=5s
@@ -726,6 +737,13 @@ show_service_info() {
     echo -e "${GREEN}部署完成!${NC}"
     echo -e "${GREEN}检测到的公网IP: $PUBLIC_IP${NC}"
     
+    # 显示服务器配置信息
+    echo -e "${YELLOW}服务器配置:${NC}"
+    echo -e "${YELLOW}传输协议: $TRANSPORT${NC}"
+    echo -e "${YELLOW}MCP服务器端口: $PORT${NC}"
+    echo -e "${YELLOW}HTML服务器端口: $HTML_PORT${NC}"
+    echo -e "${YELLOW}超时设置: ${TIMEOUT}秒${NC}"
+    
     # 直接访问MCP服务器（可能只能从本地访问）
     echo -e "${YELLOW}MCP服务器直接地址 (仅限本地访问): http://127.0.0.1:$PORT${NC}"
     echo -e "${YELLOW}MCP服务器SSE直接端点 (仅限本地访问): http://127.0.0.1:$PORT/sse${NC}"
@@ -741,6 +759,12 @@ show_service_info() {
     
     echo -e "${YELLOW}注意: 如果直接访问MCP服务失败，请使用Nginx反向代理地址${NC}"
     echo -e "${YELLOW}推荐使用: http://$PUBLIC_IP/sse 作为MCP服务的SSE端点${NC}"
+    
+    # 如果超时设置高于默认值，添加提示
+    if [ "$TIMEOUT" -gt 300 ]; then
+        echo -e "${GREEN}已设置较长的超时时间（${TIMEOUT}秒），这将有助于处理大型回测请求。${NC}"
+        echo -e "${GREEN}在客户端设置中，请确保客户端超时时间至少比服务器超时时间多30秒。${NC}"
+    fi
 }
 
 # 重启服务

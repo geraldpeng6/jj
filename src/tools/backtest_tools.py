@@ -19,7 +19,7 @@ logger = logging.getLogger('quant_mcp.backtest_tools')
 
 async def run_strategy_backtest(
     strategy_id: str,
-    listen_time: int = 30,
+    listen_time: int = 180,
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
     indicator: Optional[str] = None,
@@ -32,7 +32,8 @@ async def run_strategy_backtest(
 
     Args:
         strategy_id: 策略ID
-        listen_time: 监听时间（秒），默认30秒
+        listen_time: 监听和处理时间（秒），默认180秒。对于大型回测请增加此值以避免客户端超时。
+                    此值应该比客户端的超时时间短5-10秒，以确保有足够时间处理结果和返回响应。
         start_date: 回测开始日期，格式为 "YYYY-MM-DD"，可选，默认为一年前
         end_date: 回测结束日期，格式为 "YYYY-MM-DD"，可选，默认为今天
         indicator: 自定义指标代码，可选
