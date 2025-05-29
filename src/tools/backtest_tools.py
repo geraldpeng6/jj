@@ -95,6 +95,8 @@ async def run_strategy_backtest(
         logger.info(f"运行回测参数: strategy_id={strategy_id}, 自定义代码: indicator={bool(indicator)}, control_risk={bool(control_risk)}, timing={bool(timing)}, choose_stock={bool(choose_stock)}")
 
         # 获取策略名称 - 同时尝试从用户策略和策略库中获取
+        # 在函数内部导入，避免循环导入问题
+        from utils.strategy_utils import get_strategy_detail
         strategy_name = None
         
         # 首先尝试从用户策略库获取
