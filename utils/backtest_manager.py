@@ -91,7 +91,8 @@ def _process_task_queue():
                     indicator=task.get('indicator'),
                     control_risk=task.get('control_risk'),
                     timing=task.get('timing'),
-                    choose_stock=task.get('choose_stock')
+                    choose_stock=task.get('choose_stock'),
+                    timestamp=task.get('timestamp')  # 传递时间戳参数
                 )
                 
                 # 更新任务状态和结果
@@ -127,7 +128,9 @@ def submit_backtest_task(
     control_risk: Optional[str] = None,
     timing: Optional[str] = None,
     choose_stock: Optional[str] = None,
-    listen_time: int = 120
+    listen_time: int = 120,
+    expected_chart_path: Optional[str] = None,
+    timestamp: Optional[str] = None
 ) -> str:
     """
     提交回测任务到队列
@@ -142,12 +145,16 @@ def submit_backtest_task(
         timing: 自定义择时代码
         choose_stock: 自定义标的代码
         listen_time: 监听时间（秒）
+        expected_chart_path: 预期的图表路径，可选
+        timestamp: 时间戳，用于生成图表文件名
         
     Returns:
         str: 任务ID
     """
     # 创建任务ID
-    task_id = f"{strategy_id}_{start_date}_{end_date}_{datetime.now().strftime('%Y%m%d%H%M%S')}"
+    if timestamp is None:
+        timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
+    task_id = f"{strategy_id}_{start_date}_{end_date}_{timestamp}"
     
     # 创建任务配置
     task = {
@@ -164,7 +171,9 @@ def submit_backtest_task(
         'submit_time': datetime.now().isoformat(),
         'status': '等待中',
         'progress': 0,
-        'result': None
+        'result': None,
+        'expected_chart_path': expected_chart_path,
+        'timestamp': timestamp
     }
     
     # 保存任务到运行列表和磁盘

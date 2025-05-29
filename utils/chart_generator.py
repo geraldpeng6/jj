@@ -39,7 +39,8 @@ def generate_html(
     exchange: str,
     resolution: str = "1D",
     fq: str = "post",
-    output_dir: str = "data/charts"
+    output_dir: str = "data/charts",
+    timestamp: Optional[str] = None
 ) -> Optional[str]:
     """
     生成K线图表HTML文件
@@ -51,6 +52,7 @@ def generate_html(
         resolution: 时间周期
         fq: 复权方式
         output_dir: 输出目录
+        timestamp: 时间戳，用于生成文件名，可选，如果不提供则自动生成
 
     Returns:
         Optional[str]: 生成的HTML文件路径，如果生成失败则返回None
@@ -60,7 +62,9 @@ def generate_html(
         os.makedirs(output_dir, exist_ok=True)
 
         # 生成文件名
-        file_name = f"{symbol}_{exchange}_{resolution}_{fq}.html"
+        if timestamp is None:
+            timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+        file_name = f"{symbol}_{exchange}_{resolution}_{fq}_{timestamp}.html"
         file_path = os.path.join(output_dir, file_name)
 
         # 准备数据
@@ -1006,15 +1010,17 @@ def prepare_backtest_chart_data(
 def analyze_backtest_result(
     backtest_file_path: str,
     kline_file_path: Optional[str] = None,
-    output_dir: str = "data/charts"
+    output_dir: str = "data/charts",
+    timestamp: Optional[str] = None
 ) -> Optional[str]:
     """
-    分析已保存的回测结果并生成图表
+    分析回测结果并生成图表
 
     Args:
         backtest_file_path: 回测结果文件路径
         kline_file_path: K线数据文件路径，可选
         output_dir: 输出目录
+        timestamp: 时间戳，用于生成文件名，可选，如果不提供则自动生成
 
     Returns:
         Optional[str]: 生成的HTML文件路径，如果生成失败则返回None
@@ -1089,7 +1095,8 @@ def analyze_backtest_result(
             kline_df=kline_df,
             symbol=symbol,
             exchange=exchange,
-            output_dir=output_dir
+            output_dir=output_dir,
+            timestamp=timestamp
         )
     except Exception as e:
         logger.error(f"分析回测结果时发生错误: {e}")
@@ -1103,7 +1110,8 @@ def generate_backtest_html(
     kline_df: pd.DataFrame = None,
     symbol: str = None,
     exchange: str = None,
-    output_dir: str = "data/charts"
+    output_dir: str = "data/charts",
+    timestamp: Optional[str] = None
 ) -> Optional[str]:
     """
     生成回测结果HTML文件
@@ -1116,6 +1124,7 @@ def generate_backtest_html(
         symbol: 股票代码，可选
         exchange: 交易所代码，可选
         output_dir: 输出目录
+        timestamp: 时间戳，用于生成文件名，可选，如果不提供则自动生成
 
     Returns:
         Optional[str]: 生成的HTML文件路径，如果生成失败则返回None
@@ -1124,8 +1133,11 @@ def generate_backtest_html(
         # 确保输出目录存在
         os.makedirs(output_dir, exist_ok=True)
 
+        # 使用提供的时间戳或生成新的时间戳
+        if timestamp is None:
+            timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+
         # 生成文件名
-        timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
         if symbol and exchange:
             file_name = f"backtest_{strategy_id}_{symbol}_{exchange}_{timestamp}.html"
         else:
@@ -1139,7 +1151,7 @@ def generate_backtest_html(
                         if pos.get('category') == 1 and pos.get('symbol') and pos.get('exchange'):
                             symbol = pos.get('symbol')
                             exchange = pos.get('exchange')
-                            # 更新文件名
+                            # 更新文件名，但保持原始时间戳
                             file_name = f"backtest_{strategy_id}_{symbol}_{exchange}_{timestamp}.html"
                             break
                     if symbol and exchange:

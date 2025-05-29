@@ -1084,7 +1084,8 @@ def run_backtest(
     indicator: Optional[str] = None,
     control_risk: Optional[str] = None,
     timing: Optional[str] = None,
-    choose_stock: Optional[str] = None
+    choose_stock: Optional[str] = None,
+    timestamp: Optional[str] = None
 ) -> Dict[str, Any]:
     """
     运行回测并监听position数据
@@ -1098,6 +1099,7 @@ def run_backtest(
         control_risk: 自定义风控代码，可选
         timing: 自定义择时代码，可选
         choose_stock: 自定义标的代码或股票代码，可选
+        timestamp: 时间戳，用于生成图表文件名，可选，如果不提供则自动生成
 
     Returns:
         Dict[str, Any]: 回测结果，包含以下字段：
@@ -1369,7 +1371,8 @@ def run_backtest(
                         strategy_id=strategy_id,
                         kline_df=df,
                         symbol=symbol,
-                        exchange=exchange
+                        exchange=exchange,
+                        timestamp=timestamp  # 使用传入的时间戳，确保文件名一致
                     )
 
                     if chart_path:
@@ -1384,7 +1387,8 @@ def run_backtest(
                             symbol=symbol,
                             exchange=exchange,
                             resolution=backtest_params.get('resolution'),
-                            fq=backtest_params.get('fq')
+                            fq=backtest_params.get('fq'),
+                            timestamp=timestamp  # 使用传入的时间戳，确保文件名一致
                         )
 
                         if chart_path:

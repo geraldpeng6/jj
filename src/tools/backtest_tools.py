@@ -30,6 +30,34 @@ RUNNING_BACKTESTS = {}
 # 回测结果目录
 DATA_DIR = 'data'
 BACKTEST_DIR = os.path.join(DATA_DIR, 'backtest')
+CHARTS_DIR = os.path.join(DATA_DIR, 'charts')
+
+# 确保目录存在
+os.makedirs(BACKTEST_DIR, exist_ok=True)
+os.makedirs(CHARTS_DIR, exist_ok=True)
+
+
+def generate_chart_path(strategy_id: str, symbol: str, exchange: str, timestamp: str) -> str:
+    """
+    生成图表路径
+
+    Args:
+        strategy_id: 策略ID
+        symbol: 股票代码
+        exchange: 交易所代码
+        timestamp: 时间戳
+
+    Returns:
+        str: 图表路径
+    """
+    file_name = f"backtest_{strategy_id}_{symbol}_{exchange}_{timestamp}.html"
+    file_path = os.path.join(CHARTS_DIR, file_name)
+    
+    # 生成URL
+    base_url = "http://3.84.20.36/charts"
+    url = f"{base_url}/{file_name}"
+    
+    return url
 
 
 async def run_strategy_backtest(
@@ -67,7 +95,18 @@ async def run_strategy_backtest(
         str: 回测结果信息，或错误信息
     """
     # 创建回测任务ID
-    task_id = f"{strategy_id}_{start_date}_{end_date}_{datetime.now().strftime('%Y%m%d%H%M%S')}"
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    task_id = f"{strategy_id}_{start_date}_{end_date}_{timestamp}"
+    
+    # 解析股票代码和交易所
+    symbol = None
+    exchange = None
+    if choose_stock and not choose_stock.strip().startswith("def choose_stock"):
+        # 解析股票代码和交易所
+        parts = choose_stock.split('.')
+        if len(parts) == 2:
+            symbol = parts[0]
+            exchange = parts[1]
     
     # 如果check_existing为True，则检查是否有相同参数的回测结果
     if check_existing:
@@ -81,6 +120,25 @@ async def run_strategy_backtest(
         task_id = existing_task.get('task_id', 'unknown')
         progress = existing_task.get('progress', 0)
         task_status = existing_task.get('status', '运行中')
+        
+        # 如果任务已完成，返回结果
+        if task_status in ['成功', '完成'] and existing_task.get('result'):
+            result = existing_task.get('result', {})
+            chart_path = result.get('chart_path')
+            
+            if chart_path:
+                return f"回测任务已完成！\n\n" \
+                       f"策略: {existing_task.get('strategy_name', '未命名策略')} (ID: {existing_task.get('strategy_id', 'unknown')})\n" \
+                       f"回测结果图表链接: {chart_path}"
+        
+        # 如果任务仍在运行，返回预期的图表链接
+        expected_chart_path = existing_task.get('expected_chart_path')
+        if expected_chart_path:
+            return f"回测任务正在运行中（进度: {progress}%）。\n\n" \
+                   f"策略: {existing_task.get('strategy_name', '未命名策略')} (ID: {existing_task.get('strategy_id', 'unknown')})\n" \
+                   f"完成后结果将显示在: {expected_chart_path}\n\n" \
+                   f"请稍后访问该链接查看结果。"
+            
         return f"回测任务已在运行中，请稍后再查询结果。任务ID: {task_id}, 状态: {task_status}, 进度: {progress}%"
         
     try:
@@ -133,6 +191,11 @@ async def run_strategy_backtest(
                 strategy_name = "未命名策略"
                 logger.warning(f"无法获取策略名称，使用默认名称: {strategy_name}")
         
+        # 预先生成预期的图表路径（使用开始时间戳）
+        expected_chart_path = None
+        if symbol and exchange:
+            expected_chart_path = generate_chart_path(strategy_id, symbol, exchange, timestamp)
+        
         # 如果是后台模式，提交到任务队列并立即返回
         if background:
             # 提交任务
@@ -145,20 +208,36 @@ async def run_strategy_backtest(
                 control_risk=control_risk,
                 timing=timing,
                 choose_stock=choose_stock,
-                listen_time=max(120, listen_time)  # 后台模式下使用更长的监听时间
+                listen_time=max(120, listen_time),  # 后台模式下使用更长的监听时间
+                expected_chart_path=expected_chart_path,  # 传递预期的图表路径
+                timestamp=timestamp  # 传递时间戳
             )
             
-            # 返回任务提交成功的消息
+            # 返回任务提交成功的消息及预期的图表链接
             if stock_info and not stock_info.startswith("def choose_stock"):
-                return f"使用股票 {stock_info} 的回测任务已提交到后台运行！\n\n" \
-                       f"策略: {strategy_name} (ID: {strategy_id})\n" \
-                       f"任务ID: {task_id}\n\n" \
-                       f"您可以使用 get_backtest_status 工具查询任务状态。"
+                if expected_chart_path:
+                    return f"使用股票 {stock_info} 的回测任务已提交到后台运行！\n\n" \
+                           f"策略: {strategy_name} (ID: {strategy_id})\n" \
+                           f"任务ID: {task_id}\n\n" \
+                           f"完成后结果将显示在: {expected_chart_path}\n\n" \
+                           f"请稍后访问该链接查看结果。"
+                else:
+                    return f"使用股票 {stock_info} 的回测任务已提交到后台运行！\n\n" \
+                           f"策略: {strategy_name} (ID: {strategy_id})\n" \
+                           f"任务ID: {task_id}\n\n" \
+                           f"请等待任务完成后查看结果。"
             else:
-                return f"使用策略自带标的的回测任务已提交到后台运行！\n\n" \
-                       f"策略: {strategy_name} (ID: {strategy_id})\n" \
-                       f"任务ID: {task_id}\n\n" \
-                       f"您可以使用 get_backtest_status 工具查询任务状态。"
+                if expected_chart_path:
+                    return f"使用策略自带标的的回测任务已提交到后台运行！\n\n" \
+                           f"策略: {strategy_name} (ID: {strategy_id})\n" \
+                           f"任务ID: {task_id}\n\n" \
+                           f"完成后结果将显示在: {expected_chart_path}\n\n" \
+                           f"请稍后访问该链接查看结果。"
+                else:
+                    return f"使用策略自带标的的回测任务已提交到后台运行！\n\n" \
+                           f"策略: {strategy_name} (ID: {strategy_id})\n" \
+                           f"任务ID: {task_id}\n\n" \
+                           f"请等待任务完成后查看结果。"
 
         # 将回测任务添加到运行列表
         RUNNING_BACKTESTS[task_id] = {
@@ -170,7 +249,8 @@ async def run_strategy_backtest(
             'start_time': datetime.now(),
             'status': '初始化中',
             'progress': 0,
-            'result': None
+            'result': None,
+            'expected_chart_path': expected_chart_path
         }
 
         # 在非阻塞模式下启动回测过程，减小listen_time避免MCP超时
@@ -189,7 +269,8 @@ async def run_strategy_backtest(
             indicator=indicator,
             control_risk=control_risk,
             timing=timing,
-            choose_stock=choose_stock
+            choose_stock=choose_stock,
+            timestamp=timestamp  # 传递时间戳，用于生成图表文件名
         )
         
         # 如果回测返回了策略名称，但我们获取的策略名称不是"未命名策略"，则优先使用我们获取的名称
@@ -243,87 +324,6 @@ async def run_strategy_backtest(
             RUNNING_BACKTESTS[task_id]['status'] = f'错误: {str(e)}'
             RUNNING_BACKTESTS[task_id]['progress'] = 100
         return f"运行回测时发生错误: {e}"
-
-
-async def get_backtest_status(
-    task_id: str,
-    full_details: bool = False
-) -> str:
-    """
-    获取回测任务状态
-
-    Args:
-        task_id: 回测任务ID
-        full_details: 是否显示完整详情，默认为False
-
-    Returns:
-        str: 回测任务状态信息
-    """
-    # 获取任务状态
-    task_data = get_task_status(task_id)
-    
-    if not task_data:
-        return f"找不到回测任务 {task_id} 的信息"
-    
-    status = task_data.get('status', '未知')
-    progress = task_data.get('progress', 0)
-    
-    if status in ['成功', '完成']:
-        # 任务已完成，返回结果
-        result = task_data.get('result', {})
-        strategy_name = result.get('strategy_name', task_data.get('strategy_name', '未命名策略'))
-        
-        result_str = f"回测已完成！\n\n"
-        result_str += f"策略: {strategy_name} (ID: {result.get('strategy_id', task_data.get('strategy_id', 'unknown'))})\n"
-        result_str += f"接收到 {result.get('position_count', 0)} 条position数据\n"
-        
-        if result.get('file_path'):
-            result_str += f"数据已保存到: {result.get('file_path')}\n"
-        
-        if result.get('chart_path'):
-            result_str += f"\n回测结果图表链接如下: {result['chart_path']}"
-        else:
-            result_str += "\n未生成回测结果图表"
-            
-        # 如果需要显示完整详情
-        if full_details and result:
-            # 添加日期验证信息
-            date_validation = result.get('date_validation', {})
-            if date_validation.get('from_date_adjusted') or date_validation.get('to_date_adjusted'):
-                result_str += "\n\n日期范围已自动调整:"
-                if date_validation.get('from_date_adjusted'):
-                    result_str += f"\n- 开始日期从 {date_validation.get('original_from_date')} 调整为 {date_validation.get('adjusted_from_date')} (股票上市日期: {date_validation.get('listing_date')})"
-                if date_validation.get('to_date_adjusted'):
-                    result_str += f"\n- 结束日期从 {date_validation.get('original_to_date')} 调整为 {date_validation.get('adjusted_to_date')} (股票最后交易日期: {date_validation.get('last_date')})"
-        
-        return result_str
-        
-    elif status == '失败' or status.startswith('错误'):
-        error_msg = task_data.get('result', {}).get('error', '未知错误') if status == '失败' else status
-        return f"回测任务 {task_id} 执行失败: {error_msg}"
-        
-    else:
-        # 任务仍在运行中
-        start_time_str = task_data.get('start_time')
-        if isinstance(start_time_str, str):
-            try:
-                start_time = datetime.fromisoformat(start_time_str)
-                running_time = (datetime.now() - start_time).total_seconds()
-            except ValueError:
-                running_time = 0
-        else:
-            running_time = 0
-            
-        strategy_name = task_data.get('strategy_name', '未命名策略')
-        start_date = task_data.get('start_date', '未知')
-        end_date = task_data.get('end_date', '未知')
-        
-        result_str = f"回测任务 {task_id} 状态: {status}, 进度: {progress}%\n"
-        result_str += f"策略: {strategy_name} (ID: {task_data.get('strategy_id', 'unknown')})\n"
-        result_str += f"时间范围: {start_date} 至 {end_date}\n"
-        result_str += f"已运行: {running_time:.1f} 秒"
-        
-        return result_str
 
 
 async def list_backtests(
@@ -495,9 +495,6 @@ def register_tools(mcp: FastMCP):
     """
     # 注册运行策略回测工具
     mcp.tool()(run_strategy_backtest)
-    
-    # 注册获取回测状态工具
-    mcp.tool()(get_backtest_status)
     
     # 注册列出回测任务工具
     mcp.tool()(list_backtests)
