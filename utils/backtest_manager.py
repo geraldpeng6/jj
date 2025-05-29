@@ -13,7 +13,7 @@ import time
 import logging
 import threading
 import queue
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, Tuple
 from datetime import datetime
 import traceback
 
@@ -129,7 +129,7 @@ def submit_backtest_task(
     timing: Optional[str] = None,
     choose_stock: Optional[str] = None,
     listen_time: int = 120,
-    expected_chart_path: Optional[str] = None,
+    expected_chart_paths: Optional[List[Tuple[str, str]]] = None,
     timestamp: Optional[str] = None
 ) -> str:
     """
@@ -145,7 +145,7 @@ def submit_backtest_task(
         timing: 自定义择时代码
         choose_stock: 自定义标的代码
         listen_time: 监听时间（秒）
-        expected_chart_path: 预期的图表路径，可选
+        expected_chart_paths: 预期的图表路径列表，每项为(股票代码,图表URL)元组，可选
         timestamp: 时间戳，用于生成图表文件名
         
     Returns:
@@ -172,7 +172,7 @@ def submit_backtest_task(
         'status': '等待中',
         'progress': 0,
         'result': None,
-        'expected_chart_path': expected_chart_path,
+        'expected_chart_paths': expected_chart_paths,
         'timestamp': timestamp
     }
     
