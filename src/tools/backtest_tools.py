@@ -119,7 +119,7 @@ async def run_strategy_backtest(
             result_str += f"数据已保存到: {result['file_path']}\n"
 
             if result.get('chart_path'):
-                result_str += f"\n回测结果图表已生成并在浏览器中打开: {result['chart_path']}"
+                result_str += f"\n回测结果图表链接如下: {result['chart_path']}"
             else:
                 result_str += "\n未生成回测结果图表"
 

@@ -82,6 +82,38 @@ def get_ec2_metadata() -> Optional[str]:
     return None
 
 
+def get_public_ip() -> Optional[str]:
+    """
+    从公网IP服务获取公网IP
+
+    尝试从多个公网IP服务获取主机的公网IP
+
+    Returns:
+        Optional[str]: 主机的公网IP，如果获取失败则返回None
+    """
+    # 多个公网IP服务，按可靠性排序
+    ip_services = [
+        "https://api.ipify.org",
+        "https://api.my-ip.io/ip",
+        "https://checkip.amazonaws.com",
+        "https://ipinfo.io/ip",
+        "https://ifconfig.me/ip"
+    ]
+    
+    for service in ip_services:
+        try:
+            response = requests.get(service, timeout=5)
+            if response.status_code == 200:
+                public_ip = response.text.strip()
+                logger.info(f"从服务 {service} 获取到公网IP: {public_ip}")
+                return public_ip
+        except Exception as e:
+            logger.debug(f"从服务 {service} 获取公网IP失败: {e}")
+            continue
+    
+    return None
+
+
 def get_server_host() -> str:
     """
     获取服务器主机地址
@@ -99,35 +131,28 @@ def get_server_host() -> str:
     """
     # 1. 从环境变量获取
     env_host = os.environ.get('MCP_SERVER_HOST')
-    if env_host:
+    if env_host and env_host != '0.0.0.0':
         logger.info(f"从环境变量获取服务器主机地址: {env_host}")
         return env_host
 
     # 2. 从配置文件获取
     config = load_config()
-    if config.get('server_host'):
+    if config.get('server_host') and config.get('server_host') != '0.0.0.0':
         logger.info(f"从配置文件获取服务器主机地址: {config['server_host']}")
         return config['server_host']
 
-    # 检查是否是生产环境
-    is_production = os.environ.get('MCP_ENV') == 'production'
-
+    # 优先尝试获取公网IP，总是优先使用公网IP以便于外部访问
     # 3. 如果在EC2环境中，从EC2元数据服务获取
-    if is_production and config.get('use_ec2_metadata', True):
+    if config.get('use_ec2_metadata', True):
         ec2_ip = get_ec2_metadata()
         if ec2_ip:
             return ec2_ip
 
     # 4. 尝试从公网IP服务获取
-    if is_production and config.get('use_public_ip', True):
-        try:
-            response = requests.get('https://api.ipify.org', timeout=5)
-            if response.status_code == 200:
-                public_ip = response.text.strip()
-                logger.info(f"从公网IP服务获取到IP: {public_ip}")
-                return public_ip
-        except Exception as e:
-            logger.warning(f"获取公网IP失败: {e}")
+    if config.get('use_public_ip', True):
+        public_ip = get_public_ip()
+        if public_ip:
+            return public_ip
 
     # 5. 尝试获取本地IP
     try:
@@ -135,8 +160,9 @@ def get_server_host() -> str:
         s.connect(("8.8.8.8", 80))
         local_ip = s.getsockname()[0]
         s.close()
-        logger.info(f"获取到本地IP: {local_ip}")
-        return local_ip
+        if local_ip != '0.0.0.0' and local_ip != '127.0.0.1':
+            logger.info(f"获取到本地IP: {local_ip}")
+            return local_ip
     except Exception as e:
         logger.warning(f"获取本地IP失败: {e}")
 
@@ -162,6 +188,10 @@ def get_html_url(file_path: str) -> str:
 
     # 如果主机地址未初始化，则获取
     if DEFAULT_SERVER_HOST is None:
+        DEFAULT_SERVER_HOST = get_server_host()
+    
+    # 如果主机地址是0.0.0.0，重新尝试获取公网IP
+    if DEFAULT_SERVER_HOST == '0.0.0.0':
         DEFAULT_SERVER_HOST = get_server_host()
 
     # 获取服务器端口

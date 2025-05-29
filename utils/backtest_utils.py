@@ -1147,7 +1147,13 @@ def run_backtest(
         result['error'] = error_msg
         return result
 
-    strategy_name = strategy_data.get('name') or strategy_data.get('strategy_name', '未命名策略')
+    # 获取策略名称，优先使用name字段，其次使用strategy_name字段
+    strategy_name = strategy_data.get('name')
+    if not strategy_name:
+        strategy_name = strategy_data.get('strategy_name')
+    if not strategy_name:
+        strategy_name = '未命名策略'
+
     result['strategy_name'] = strategy_name
 
     logger.info(f"开始运行回测，策略: {strategy_name} (ID: {strategy_id})，监听时间: {listen_time}秒")
@@ -1341,8 +1347,8 @@ def run_backtest(
 
                     if chart_path:
                         result['chart_path'] = chart_path
-                        # 在浏览器中打开图表
-                        open_in_browser(chart_path)
+                        # 不再自动打开浏览器
+                        logger.info(f"回测图表已生成: {chart_path}")
                     else:
                         # 如果回测图表生成失败，尝试生成普通K线图表
                         from utils.chart_generator import generate_html
@@ -1356,8 +1362,8 @@ def run_backtest(
 
                         if chart_path:
                             result['chart_path'] = chart_path
-                            # 在浏览器中打开图表
-                            open_in_browser(chart_path)
+                            # 不再自动打开浏览器
+                            logger.info(f"K线图表已生成: {chart_path}")
                 else:
                     logger.warning(f"获取K线数据失败或数据为空: {symbol}.{exchange}")
 

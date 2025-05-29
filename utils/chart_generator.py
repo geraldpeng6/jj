@@ -317,12 +317,11 @@ def open_in_browser(file_path: str) -> bool:
                 file_url = f"file://{abs_path}"
                 logger.info(f"使用本地文件URL: {file_url}")
 
-        # 在浏览器中打开
-        webbrowser.open(file_url)
-        logger.info(f"已在浏览器中打开: {file_url}")
+        # 不再自动打开浏览器，只返回URL
+        logger.info(f"生成URL: {file_url}")
         return True
     except Exception as e:
-        logger.error(f"在浏览器中打开文件时发生错误: {e}")
+        logger.error(f"生成URL时发生错误: {e}")
         return False
 
 
