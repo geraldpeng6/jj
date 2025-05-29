@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 """
-Symbol工具模块调试脚本
+Symbol工具模块调试脚本!
 
 专门用于调试symbol_utils.py中的日期验证逻辑
 """
