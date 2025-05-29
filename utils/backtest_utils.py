@@ -26,6 +26,7 @@ from utils.auth_utils import load_auth_config, get_auth_info, get_headers
 from utils.kline_utils import fetch_and_save_kline
 from utils.chart_generator import open_in_browser, generate_backtest_html, load_backtest_data
 from utils.symbol_utils import validate_date_range
+from utils.date_utils import get_beijing_now, parse_date_string, validate_date_range as validate_date_str_range
 
 # 获取日志记录器
 logger = logging.getLogger('quant_mcp.backtest_utils')
@@ -184,13 +185,25 @@ def send_backtest_request(
 
     try:
         # 处理日期参数
+        # 获取当前北京时间和日期
+        current_date = get_beijing_now()
+        
+        # 验证并修复日期格式
+        start_date, end_date = validate_date_str_range(start_date, end_date)
+        
         # 默认时间范围：一年前到今天
-        default_start_date = (datetime.now() - timedelta(days=365)).strftime("%Y-%m-%d")
-        default_end_date = datetime.now().strftime("%Y-%m-%d")
+        default_start_date = (current_date - timedelta(days=365)).strftime("%Y-%m-%d")
+        default_end_date = current_date.strftime("%Y-%m-%d")
 
-        # 使用提供的日期或默认值
-        start_date = start_date or default_start_date
-        end_date = end_date or default_end_date
+        # 验证日期是否在未来
+        try:
+            end_date_dt = datetime.strptime(end_date, "%Y-%m-%d")
+            # 如果结束日期在未来，记录一条信息
+            if end_date_dt.date() > current_date.date():
+                logger.info(f"请求的回测结束日期 {end_date} 在未来，实际数据可能只到当前日期 {default_end_date}")
+        except ValueError:
+            logger.warning(f"无效的结束日期格式: {end_date}，使用默认值: {default_end_date}")
+            end_date = default_end_date
 
         logger.info(f"回测时间范围: {start_date} 到 {end_date}")
 
@@ -198,15 +211,9 @@ def send_backtest_request(
         try:
             start_timestamp = int(datetime.strptime(start_date, "%Y-%m-%d").timestamp() * 1000)
             end_timestamp = int(datetime.strptime(end_date, "%Y-%m-%d").timestamp() * 1000)
-            time_range = [f"{start_date} 00:00:00", f"{end_date} 23:59:59"]
         except ValueError as e:
-            logger.error(f"日期格式错误: {e}，使用默认时间范围")
-            # 出错时使用默认值
-            start_date = default_start_date
-            end_date = default_end_date
-            start_timestamp = int(datetime.strptime(start_date, "%Y-%m-%d").timestamp() * 1000)
-            end_timestamp = int(datetime.strptime(end_date, "%Y-%m-%d").timestamp() * 1000)
-            time_range = [f"{start_date} 00:00:00", f"{end_date} 23:59:59"]
+            logger.error(f"日期格式错误: {e}")
+            return None
 
         # 构建回测请求URL
         url = f"{BASE_URL}/trader-service/strategy/back-test"
@@ -267,7 +274,7 @@ def send_backtest_request(
     pass
 ''',
                 "frequency": "D",
-                "time_range": time_range,
+                "time_range": [f"{start_date} 00:00:00", f"{end_date} 23:59:59"],
                 "env": "prod",
                 "size": 500,
                 "channel": 0,

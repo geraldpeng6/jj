@@ -15,6 +15,7 @@ from datetime import datetime
 from typing import Dict, Optional, Any, Tuple, List
 
 from utils.auth_utils import load_auth_config, get_auth_info, get_headers
+from utils.date_utils import get_beijing_now, parse_date_string, validate_date_range as validate_date_str_range
 
 # 获取日志记录器
 logger = logging.getLogger('quant_mcp.symbol_utils')
@@ -183,6 +184,18 @@ def validate_date_range(
         'message': []
     }
 
+    # 首先验证日期字符串格式，修复无效日期
+    from_date, to_date = validate_date_str_range(from_date, to_date)
+    
+    # 如果原始日期与验证后的日期不同，记录调整信息
+    if from_date != result_info['original_from_date']:
+        result_info['from_date_adjusted'] = True
+        result_info['message'].append(f"开始日期 {result_info['original_from_date']} 格式无效或日期不存在，已调整为 {from_date}")
+        
+    if to_date != result_info['original_to_date']:
+        result_info['to_date_adjusted'] = True
+        result_info['message'].append(f"结束日期 {result_info['original_to_date']} 格式无效或日期不存在，已调整为 {to_date}")
+
     # 获取股票信息
     symbol_info = get_symbol_info(full_name)
     if not symbol_info:
@@ -202,15 +215,6 @@ def validate_date_range(
         logger.warning(f"股票 {full_name} 的上市日期或最后交易日期信息不完整，将使用原始日期范围")
         return from_date, to_date, result_info
 
-    # 如果没有提供日期，使用默认值
-    if not from_date:
-        from_date = (datetime.now().replace(year=datetime.now().year - 1)).strftime("%Y-%m-%d")
-        result_info['original_from_date'] = from_date
-
-    if not to_date:
-        to_date = datetime.now().strftime("%Y-%m-%d")
-        result_info['original_to_date'] = to_date
-
     # 转换日期为datetime对象进行比较
     try:
         from_date_dt = datetime.strptime(from_date, "%Y-%m-%d")
@@ -222,19 +226,24 @@ def validate_date_range(
             last_date = last_date.split(' ')[0]  # 只取日期部分
         last_date_dt = datetime.strptime(last_date, "%Y-%m-%d")
 
+        # 获取当前北京日期
+        current_date_dt = get_beijing_now()
+
         # 检查并调整开始日期
         if from_date_dt < listing_date_dt:
             from_date = listing_date
-            result_info['from_date_adjusted'] = True
-            result_info['message'].append(f"开始日期 {result_info['original_from_date']} 早于股票上市日期 {listing_date}，已调整为上市日期")
-            logger.info(f"开始日期 {result_info['original_from_date']} 早于股票上市日期 {listing_date}，已调整为上市日期")
+            if not result_info['from_date_adjusted']:  # 避免重复添加调整信息
+                result_info['from_date_adjusted'] = True
+                result_info['message'].append(f"开始日期 {result_info['original_from_date']} 早于股票上市日期 {listing_date}，已调整为上市日期")
+                logger.info(f"开始日期 {result_info['original_from_date']} 早于股票上市日期 {listing_date}，已调整为上市日期")
 
-        # 检查并调整结束日期
-        if to_date_dt > last_date_dt:
+        # 检查并调整结束日期 - 只有当最后交易日期在当前日期之前才调整
+        if to_date_dt > last_date_dt and last_date_dt < current_date_dt:
             to_date = last_date
-            result_info['to_date_adjusted'] = True
-            result_info['message'].append(f"结束日期 {result_info['original_to_date']} 晚于股票最后交易日期 {last_date}，已调整为最后交易日期")
-            logger.info(f"结束日期 {result_info['original_to_date']} 晚于股票最后交易日期 {last_date}，已调整为最后交易日期")
+            if not result_info['to_date_adjusted']:  # 避免重复添加调整信息
+                result_info['to_date_adjusted'] = True
+                result_info['message'].append(f"结束日期 {result_info['original_to_date']} 晚于股票最后交易日期 {last_date}，已调整为最后交易日期")
+                logger.info(f"结束日期 {result_info['original_to_date']} 晚于股票最后交易日期 {last_date}，已调整为最后交易日期")
 
     except ValueError as e:
         logger.error(f"日期格式错误: {e}，将使用原始日期范围")

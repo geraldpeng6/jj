@@ -16,6 +16,7 @@ import pandas as pd
 from typing import Optional, Union, Tuple
 
 from utils.auth_utils import load_auth_config, get_auth_info, get_headers
+from utils.date_utils import get_beijing_now, parse_date_string, validate_date_range
 
 # 获取日志记录器
 logger = logging.getLogger('quant_mcp.kline_utils')
@@ -43,8 +44,8 @@ def fetch_and_save_kline(
         symbol: 股票代码，例如 "600000"
         exchange: 交易所代码，例如 "XSHG"
         resolution: 时间周期，例如 "1D"（日线）, "1"（1分钟）
-        from_date: 开始日期，格式为YYYY-MM-DD，默认为一年前
-        to_date: 结束日期，格式为YYYY-MM-DD，默认为当前日期
+        from_date: 开始日期，格式为YYYY-MM-DD, YYYY.MM.DD或YYYY/MM/DD，默认为一年前
+        to_date: 结束日期，格式为YYYY-MM-DD, YYYY.MM.DD或YYYY/MM/DD，默认为当前日期
         fq: 复权方式，"post"（后复权）, "pre"（前复权）, "none"（不复权）
         fq_date: 复权基准日期，格式为YYYY-MM-DD，默认与to_date相同
         category: 品种类别，默认为 "stock"（股票）
@@ -71,27 +72,38 @@ def fetch_and_save_kline(
         if not user_id:
             return False, "错误: 无法获取认证信息", None
 
+        # 验证并修复日期格式
+        from_date, to_date = validate_date_range(from_date, to_date)
+        
         # 处理日期参数
-        # 如果from_date为None，默认为一年前
-        if from_date is None:
-            from_date_dt = datetime.datetime.now() - datetime.timedelta(days=365)
+        # 获取当前北京时间和日期
+        current_dt = get_beijing_now()
+        current_date = current_dt.strftime("%Y-%m-%d")
+        
+        # 处理开始日期
+        try:
+            from_date_dt = datetime.datetime.strptime(from_date, "%Y-%m-%d")
             from_date_ts = int(from_date_dt.timestamp() * 1000)
-        else:
-            try:
-                from_date_dt = datetime.datetime.strptime(from_date, "%Y-%m-%d")
-                from_date_ts = int(from_date_dt.timestamp() * 1000)
-            except ValueError:
-                return False, f"错误: 无效的开始日期格式: {from_date}，应为YYYY-MM-DD", None
-
-        # 如果to_date为None，默认为今天
-        if to_date is None:
-            to_date_ts = int(datetime.datetime.now().timestamp() * 1000)
-        else:
-            try:
-                to_date_dt = datetime.datetime.strptime(to_date, "%Y-%m-%d")
-                to_date_ts = int(to_date_dt.timestamp() * 1000)
-            except ValueError:
-                return False, f"错误: 无效的结束日期格式: {to_date}，应为YYYY-MM-DD", None
+        except (ValueError, TypeError):
+            # 如果日期解析失败，使用一年前的日期
+            from_date_dt = current_dt - datetime.timedelta(days=365)
+            from_date_ts = int(from_date_dt.timestamp() * 1000)
+            from_date = from_date_dt.strftime("%Y-%m-%d")
+            logger.warning(f"开始日期格式无效，已使用默认日期: {from_date}")
+            
+        # 处理结束日期
+        try:
+            to_date_dt = datetime.datetime.strptime(to_date, "%Y-%m-%d")
+            to_date_ts = int(to_date_dt.timestamp() * 1000)
+            # 如果结束日期在未来，记录一条信息
+            if to_date_dt.date() > current_dt.date():
+                logger.info(f"请求的结束日期 {to_date} 在未来，实际可能只返回到当前日期 {current_date} 的数据")
+        except (ValueError, TypeError):
+            # 如果日期解析失败，使用当前日期
+            to_date_dt = current_dt
+            to_date_ts = int(to_date_dt.timestamp() * 1000)
+            to_date = current_date
+            logger.warning(f"结束日期格式无效，已使用当前日期: {to_date}")
 
         # 处理复权基准日期 - 始终使用to_date作为fq_date
         if fq_date is None:
@@ -99,10 +111,20 @@ def fetch_and_save_kline(
             fq_date_ts = to_date_ts
         else:
             try:
-                fq_date_dt = datetime.datetime.strptime(fq_date, "%Y-%m-%d")
-                fq_date_ts = int(fq_date_dt.timestamp() * 1000)
-            except ValueError:
-                return False, f"错误: 无效的复权基准日期格式: {fq_date}，应为YYYY-MM-DD", None
+                # 尝试解析和验证fq_date
+                fq_date_parsed = parse_date_string(fq_date)
+                if fq_date_parsed:
+                    fq_date = fq_date_parsed.strftime("%Y-%m-%d")
+                    fq_date_ts = int(fq_date_parsed.timestamp() * 1000)
+                else:
+                    # 如果日期无效，使用to_date
+                    logger.warning(f"复权基准日期 '{fq_date}' 无效，使用结束日期 {to_date} 作为复权基准")
+                    fq_date = to_date
+                    fq_date_ts = to_date_ts
+            except Exception as e:
+                logger.warning(f"解析复权基准日期异常: {e}，使用结束日期 {to_date} 作为复权基准")
+                fq_date = to_date
+                fq_date_ts = to_date_ts
 
         # 构建请求参数
         params = {
@@ -146,6 +168,15 @@ def fetch_and_save_kline(
 
                 # 转换时间戳为日期时间
                 df['time'] = pd.to_datetime(df['time'], unit='ms')
+                
+                # 记录日期范围
+                actual_start_date = df['time'].min().strftime('%Y-%m-%d')
+                actual_end_date = df['time'].max().strftime('%Y-%m-%d')
+                logger.info(f"实际获取到的数据日期范围: {actual_start_date} 至 {actual_end_date}")
+                
+                # 如果请求的结束日期在未来，但实际数据没有达到今天，记录警告
+                if to_date > current_date and actual_end_date < current_date:
+                    logger.warning(f"请求了未来日期 {to_date}，但最新数据仅到 {actual_end_date}，可能是数据源尚未更新")
 
                 # 按时间排序
                 df = df.sort_values('time')

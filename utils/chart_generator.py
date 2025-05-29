@@ -20,6 +20,7 @@ from typing import Optional, Dict, List, Any, Tuple, Union
 from jinja2 import Template
 
 from utils.html_server import get_html_url, generate_test_html
+from utils.date_utils import get_beijing_now
 
 # 获取日志记录器
 logger = logging.getLogger('quant_mcp.chart_generator')
@@ -63,7 +64,7 @@ def generate_html(
 
         # 生成文件名
         if timestamp is None:
-            timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+            timestamp = get_beijing_now().strftime('%Y%m%d_%H%M%S')
         file_name = f"{symbol}_{exchange}_{resolution}_{fq}_{timestamp}.html"
         file_path = os.path.join(output_dir, file_name)
 
@@ -105,6 +106,18 @@ def generate_html(
             start_date = chart_data['time'].min().strftime('%Y-%m-%d')
             end_date = chart_data['time'].max().strftime('%Y-%m-%d')
             date_range = f"{start_date} 至 {end_date}"
+            
+            # 获取最新日期信息（使用北京时间）
+            current_date = get_beijing_now().strftime('%Y-%m-%d')
+            latest_date_info = ""
+            
+            # 如果最新数据不是今天的，添加提示信息
+            if end_date != current_date:
+                latest_date_info = f"（最新数据截至 {end_date}，当前日期 {current_date}）"
+                logger.info(f"图表数据不是最新的: 最新数据日期 {end_date}, 当前日期 {current_date}")
+            
+            # 更新日期范围显示
+            date_range = f"{start_date} 至 {end_date} {latest_date_info}"
         else:
             date_range = "无数据"
 
@@ -124,7 +137,7 @@ def generate_html(
             volatility=stats['volatility'],
             avg_volume=stats['avg_volume'],
             kline_data=json.dumps(echarts_data),
-            generation_time=datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            generation_time=get_beijing_now().strftime('%Y-%m-%d %H:%M:%S')
         )
 
         # 写入HTML文件
@@ -139,6 +152,7 @@ def generate_html(
 
         logger.info(f"K线图表已生成: {abs_file_path}")
         logger.info(f"K线图表Web URL: {web_url}")
+        logger.info(f"图表数据日期范围: {date_range}")
 
         return web_url
     except Exception as e:
@@ -1135,7 +1149,7 @@ def generate_backtest_html(
 
         # 使用提供的时间戳或生成新的时间戳
         if timestamp is None:
-            timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+            timestamp = get_beijing_now().strftime('%Y%m%d_%H%M%S')
 
         # 生成文件名
         if symbol and exchange:
@@ -1202,7 +1216,7 @@ def generate_backtest_html(
             date_range=date_range,
             metrics=metrics,
             chart_data=json.dumps(chart_data),
-            generation_time=datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            generation_time=get_beijing_now().strftime('%Y-%m-%d %H:%M:%S')
         )
 
         # 写入HTML文件

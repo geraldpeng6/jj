@@ -20,6 +20,7 @@ from utils.backtest_manager import (
     submit_backtest_task, get_all_tasks,
     find_task_by_params, cleanup_old_tasks
 )
+from utils.date_utils import get_beijing_now, validate_date_range
 
 # 获取日志记录器
 logger = logging.getLogger('quant_mcp.backtest_tools')
@@ -94,9 +95,20 @@ async def run_strategy_backtest(
     Returns:
         str: 回测结果信息，或错误信息
     """
+    # 验证并修复日期
+    start_date, end_date = validate_date_range(start_date, end_date)
+    
     # 创建回测任务ID
-    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    beijing_now = get_beijing_now()
+    timestamp = beijing_now.strftime('%Y%m%d_%H%M%S')
     task_id = f"{strategy_id}_{start_date}_{end_date}_{timestamp}"
+    
+    # 获取当前北京日期
+    current_date = beijing_now.strftime('%Y-%m-%d')
+    
+    # 检查是否请求了未来日期
+    if end_date and end_date > current_date:
+        logger.info(f"请求的回测结束日期 {end_date} 在未来，实际数据可能只到当前日期 {current_date}")
     
     # 初始化预期的图表路径列表
     expected_chart_paths = []
@@ -391,7 +403,8 @@ async def list_backtests(
         if submit_time_str:
             try:
                 submit_time = datetime.fromisoformat(submit_time_str)
-                submit_time_display = submit_time.strftime("%Y-%m-%d %H:%M:%S")
+                # 显示为北京时间
+                submit_time_display = submit_time.strftime("%Y-%m-%d %H:%M:%S") + " (北京时间)"
             except ValueError:
                 submit_time_display = submit_time_str
         else:
