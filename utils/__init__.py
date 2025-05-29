@@ -27,4 +27,13 @@ from utils.backtest_utils import (
     calculate_performance_metrics
 )
 
+# 导入回测管理相关工具函数
+from utils.backtest_manager import (
+    submit_backtest_task,
+    get_task_status,
+    get_all_tasks,
+    find_task_by_params,
+    cleanup_old_tasks
+)
+
 # 提示模板相关工具函数已移至src/utils/prompt_utils.py

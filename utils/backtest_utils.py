@@ -1282,25 +1282,52 @@ def run_backtest(
         position_count = 0
         no_new_data_count = 0
         max_no_new_data_count = 5  # 如果连续5秒没有新数据，认为回测可能已经完成
+        
+        # 每次接收到新数据时记录的时间
+        last_data_time = time.time()
+        # 设置一个初始检查间隔，初始为1秒
+        check_interval = 1.0
 
         try:
             while time.time() - start_time < listen_time:
                 # 检查是否有新的position数据
                 current_count = len(mqtt_client.position_data)
+                
                 if current_count > position_count:
                     logger.info(f"收到{current_count - position_count}条新的position数据，总计: {current_count}条")
                     position_count = current_count
                     no_new_data_count = 0  # 重置无新数据计数器
+                    last_data_time = time.time()  # 更新最后接收数据时间
+                    check_interval = 1.0  # 重置检查间隔为1秒
                 else:
                     no_new_data_count += 1  # 增加无新数据计数器
                 
-                # 如果已经接收到足够的数据（至少10条）并且连续5秒没有新数据，可以提前结束
+                # 提前终止条件1：如果已经接收到足够的数据（至少10条）并且连续5秒没有新数据
                 if position_count >= 10 and no_new_data_count >= max_no_new_data_count:
                     logger.info(f"已接收到{position_count}条数据，且连续{no_new_data_count}秒无新数据，提前结束监听")
                     break
-
-                # 每秒检查一次
-                time.sleep(1)
+                
+                # 提前终止条件2：如果已经接收到少量数据（1-9条），且较长时间（10秒）没有新数据
+                elapsed_since_last_data = time.time() - last_data_time
+                if 0 < position_count < 10 and elapsed_since_last_data > 10:
+                    logger.info(f"已接收到{position_count}条数据，且{elapsed_since_last_data:.1f}秒无新数据，可能是小型回测，提前结束监听")
+                    break
+                
+                # 自适应休眠策略：随着无新数据时间的增加，检查间隔也增加，最多到2秒
+                if no_new_data_count > 3:
+                    check_interval = min(2.0, check_interval * 1.2)  # 逐渐增加检查间隔，最多到2秒
+                    
+                # 休眠前记录剩余的监听时间
+                remaining_time = listen_time - (time.time() - start_time)
+                logger.debug(f"剩余监听时间: {remaining_time:.1f}秒，当前检查间隔: {check_interval:.1f}秒")
+                
+                # 确保不会休眠超过剩余时间
+                actual_sleep = min(check_interval, remaining_time)
+                if actual_sleep <= 0:
+                    break  # 已经达到或超过了监听时间限制
+                    
+                # 使用实际计算的休眠时间
+                time.sleep(actual_sleep)
 
             logger.info(f"监听结束，共收到{len(mqtt_client.position_data)}条position数据")
 
