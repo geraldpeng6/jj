@@ -94,6 +94,24 @@ async def run_strategy_backtest(
         # 记录传递的参数，用于调试
         logger.info(f"运行回测参数: strategy_id={strategy_id}, 自定义代码: indicator={bool(indicator)}, control_risk={bool(control_risk)}, timing={bool(timing)}, choose_stock={bool(choose_stock)}")
 
+        # 获取策略名称 - 同时尝试从用户策略和策略库中获取
+        strategy_name = None
+        
+        # 首先尝试从用户策略库获取
+        user_strategy = get_strategy_detail(strategy_id, "user")
+        if user_strategy and (user_strategy.get('name') or user_strategy.get('strategy_name')):
+            strategy_name = user_strategy.get('name') or user_strategy.get('strategy_name')
+            logger.info(f"从用户策略库获取到策略名称: {strategy_name}")
+        else:
+            # 尝试从系统策略库获取
+            library_strategy = get_strategy_detail(strategy_id, "library")
+            if library_strategy and (library_strategy.get('name') or library_strategy.get('strategy_name')):
+                strategy_name = library_strategy.get('name') or library_strategy.get('strategy_name')
+                logger.info(f"从系统策略库获取到策略名称: {strategy_name}")
+            else:
+                strategy_name = "未命名策略"
+                logger.warning(f"无法获取策略名称，使用默认名称: {strategy_name}")
+        
         # 运行回测
         result = run_backtest(
             strategy_id=strategy_id,
@@ -105,6 +123,11 @@ async def run_strategy_backtest(
             timing=timing,
             choose_stock=choose_stock
         )
+
+        # 如果回测返回了策略名称，但我们获取的策略名称不是"未命名策略"，则优先使用我们获取的名称
+        if result['success'] and result['strategy_name'] == '未命名策略' and strategy_name != '未命名策略':
+            result['strategy_name'] = strategy_name
+            logger.info(f"使用API获取的策略名称: {strategy_name}")
 
         # 格式化输出
         if result['success']:

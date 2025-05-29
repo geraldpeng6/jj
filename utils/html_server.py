@@ -211,8 +211,23 @@ def get_html_url(file_path: str) -> str:
     # 提取相对路径
     rel_path = os.path.relpath(abs_file_path, charts_dir)
 
-    # 构建URL
-    url = f"http://{DEFAULT_SERVER_HOST}:{server_port}/charts/{rel_path}"
+    # 检查是否使用公网IP（通常是EC2或外部服务器的IP）
+    is_public_ip = False
+    if DEFAULT_SERVER_HOST != 'localhost' and DEFAULT_SERVER_HOST != '127.0.0.1':
+        # 简单检查是否可能是公网IP
+        ip_parts = DEFAULT_SERVER_HOST.split('.')
+        if len(ip_parts) == 4 and all(p.isdigit() for p in ip_parts):
+            # 检查格式是否像IP地址
+            if ip_parts[0] not in ('10', '172', '192') or (ip_parts[0] == '172' and not (16 <= int(ip_parts[1]) <= 31)) or (ip_parts[0] == '192' and ip_parts[1] != '168'):
+                is_public_ip = True
+                logger.debug(f"检测到公网IP: {DEFAULT_SERVER_HOST}")
+    
+    # 构建URL - 如果是公网IP，不包含端口号（假设Nginx已经配置好了）
+    if is_public_ip:
+        url = f"http://{DEFAULT_SERVER_HOST}/charts/{rel_path}"
+    else:
+        url = f"http://{DEFAULT_SERVER_HOST}:{server_port}/charts/{rel_path}"
+    
     logger.debug(f"生成HTML URL: {url}")
 
     return url
