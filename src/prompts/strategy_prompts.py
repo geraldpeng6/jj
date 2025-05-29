@@ -2,19 +2,16 @@
 # -*- coding: utf-8 -*-
 
 """
-策略提示模块
+交易策略提示模块
 
-提供交易策略相关的MCP提示模板
+提供交易策略相关的MCP提示模板，包括策略创建、优化等
 """
 
 import logging
 from typing import Dict, Any, List, Optional
 from pydantic import Field
 from mcp.server.fastmcp import FastMCP
-from mcp.types import PromptMessage, TextContent, EmbeddedResource
-
-# 导入采样工具
-from src.utils.sampling_utils import request_sampling, SYSTEM_PROMPTS, MODEL_PREFERENCES
+from mcp.types import PromptMessage, TextContent, EmbeddedResource, TextResourceContents
 
 # 获取日志记录器
 logger = logging.getLogger('quant_mcp.strategy_prompts')

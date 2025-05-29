@@ -65,8 +65,6 @@ def setup_logging(logger_name, log_level=logging.INFO, log_dir='data/logs', max_
             feature = "server"
         elif 'html_server' in parts[-1]:
             feature = "html"
-        elif 'sampling' in parts[-1]:
-            feature = "sampling"
         elif 'prompt' in parts[-1]:
             feature = "prompt"
         else:

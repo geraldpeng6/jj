@@ -4,7 +4,7 @@
 """
 回测分析提示模块
 
-提供策略回测分析相关的MCP提示模板，包括回测结果分析、绩效评估和优化建议等
+提供回测结果分析相关的MCP提示模板，包括回测绩效评估、策略改进等
 """
 
 import logging
@@ -12,9 +12,6 @@ from typing import Dict, Any, List, Optional
 from pydantic import Field
 from mcp.server.fastmcp import FastMCP
 from mcp.types import PromptMessage, TextContent, EmbeddedResource, TextResourceContents
-
-# 导入采样工具
-from src.utils.sampling_utils import request_sampling, SYSTEM_PROMPTS, MODEL_PREFERENCES
 
 # 获取日志记录器
 logger = logging.getLogger('quant_mcp.backtest_prompts')

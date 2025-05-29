@@ -4,7 +4,7 @@
 """
 技术分析提示模块
 
-提供技术分析相关的MCP提示模板，包括技术指标分析、形态识别和趋势分析等
+提供技术分析相关的MCP提示模板，包括技术指标分析、图表形态分析等
 """
 
 import logging
@@ -12,9 +12,6 @@ from typing import Dict, Any, List, Optional
 from pydantic import Field
 from mcp.server.fastmcp import FastMCP
 from mcp.types import PromptMessage, TextContent, EmbeddedResource, TextResourceContents
-
-# 导入采样工具
-from src.utils.sampling_utils import request_sampling, SYSTEM_PROMPTS, MODEL_PREFERENCES
 
 # 获取日志记录器
 logger = logging.getLogger('quant_mcp.technical_prompts')

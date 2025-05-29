@@ -4,7 +4,7 @@
 """
 市场分析提示模块
 
-提供市场分析相关的MCP提示模板，包括宏观经济分析、行业分析和市场情绪分析等
+提供市场分析相关的MCP提示模板，包括宏观分析、市场情绪和市场趋势等
 """
 
 import logging
@@ -12,9 +12,6 @@ from typing import Dict, Any, List, Optional
 from pydantic import Field
 from mcp.server.fastmcp import FastMCP
 from mcp.types import PromptMessage, TextContent, EmbeddedResource, TextResourceContents
-
-# 导入采样工具
-from src.utils.sampling_utils import request_sampling, SYSTEM_PROMPTS, MODEL_PREFERENCES
 
 # 获取日志记录器
 logger = logging.getLogger('quant_mcp.market_prompts')
