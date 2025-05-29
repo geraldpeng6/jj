@@ -1214,6 +1214,33 @@ def run_backtest(
             result['error'] = error_msg
             return result
 
+        # 记录原始请求的日期范围
+        logger.info(f"请求的原始日期范围: 从 {start_date or '(未指定)'} 到 {end_date or '(未指定)'}")
+        
+        # 获取当前北京时间
+        current_date = get_beijing_now()
+        logger.info(f"当前北京时间: {current_date.strftime('%Y-%m-%d %H:%M:%S')}")
+        
+        # 验证日期格式
+        start_date_fmt, end_date_fmt = validate_date_range(start_date, end_date)
+        
+        # 记录格式验证后的日期
+        if start_date_fmt != start_date:
+            logger.info(f"开始日期格式已修正: {start_date} -> {start_date_fmt}")
+            result['date_validation']['from_date_adjusted'] = True
+            result['date_validation']['messages'].append(f"开始日期格式已修正: {start_date} -> {start_date_fmt}")
+            
+        if end_date_fmt != end_date:
+            logger.info(f"结束日期格式已修正: {end_date} -> {end_date_fmt}")
+            result['date_validation']['to_date_adjusted'] = True
+            result['date_validation']['messages'].append(f"结束日期格式已修正: {end_date} -> {end_date_fmt}")
+            
+        # 更新格式验证后的日期
+        start_date = start_date_fmt
+        end_date = end_date_fmt
+        result['date_validation']['adjusted_from_date'] = start_date
+        result['date_validation']['adjusted_to_date'] = end_date
+
         # 验证日期范围
         if symbols and len(symbols) > 0:
             # 获取第一个股票的完整代码
@@ -1224,7 +1251,7 @@ def run_backtest(
 
                 # 验证并调整日期范围
                 logger.info(f"验证股票 {full_name} 的回测日期范围")
-                validated_start_date, validated_end_date, validation_info = validate_date_range(
+                validated_start_date, validated_end_date, validation_info = validate_symbol_date_range(
                     full_name=full_name,
                     from_date=start_date,
                     to_date=end_date
@@ -1250,6 +1277,15 @@ def run_backtest(
                     logger.info(f"回测日期范围已调整: {start_date} 到 {end_date}")
                     for msg in validation_info.get('message', []):
                         logger.info(msg)
+                
+                # 检查是否请求了未来日期
+                try:
+                    end_date_dt = datetime.strptime(end_date, "%Y-%m-%d")
+                    if end_date_dt.date() > current_date.date():
+                        days_in_future = (end_date_dt.date() - current_date.date()).days
+                        logger.info(f"请求的结束日期 {end_date} 在未来 {days_in_future} 天，API可能返回到当前日期 {current_date.strftime('%Y-%m-%d')} 的数据")
+                except (ValueError, TypeError):
+                    pass
 
         # 获取MQTT连接信息
         mqtt_info = get_mqtt_info()
@@ -1361,6 +1397,7 @@ def run_backtest(
                 exchange = symbol_info.get('exchange')
 
                 # 获取K线数据
+                logger.info(f"获取股票 {symbol}.{exchange} 的K线数据，日期范围: {backtest_params.get('start_date')} 到 {backtest_params.get('end_date')}")
                 success, df, kline_file_path = fetch_and_save_kline(
                     symbol=symbol,
                     exchange=exchange,
@@ -1371,6 +1408,11 @@ def run_backtest(
                 )
 
                 if success and df is not None and not df.empty:
+                    # 记录实际获取到的K线数据日期范围
+                    min_date = df['time'].min().strftime('%Y-%m-%d')
+                    max_date = df['time'].max().strftime('%Y-%m-%d')
+                    logger.info(f"获取到的K线数据日期范围: {min_date} 至 {max_date}, 共 {len(df)} 条数据")
+                    
                     # 生成回测结果图表
                     chart_path = generate_backtest_html(
                         backtest_data=mqtt_client.position_data,
@@ -1404,6 +1446,8 @@ def run_backtest(
                             logger.info(f"K线图表已生成: {chart_path}")
                 else:
                     logger.warning(f"获取K线数据失败或数据为空: {symbol}.{exchange}")
+                    if not isinstance(df, pd.DataFrame):
+                        logger.warning(f"错误信息: {df}")
 
             return result
 

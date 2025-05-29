@@ -237,13 +237,17 @@ def validate_date_range(
                 result_info['message'].append(f"开始日期 {result_info['original_from_date']} 早于股票上市日期 {listing_date}，已调整为上市日期")
                 logger.info(f"开始日期 {result_info['original_from_date']} 早于股票上市日期 {listing_date}，已调整为上市日期")
 
-        # 检查并调整结束日期 - 只有当最后交易日期在当前日期之前才调整
+        # 检查并调整结束日期 - 只有当最后交易日期在当前日期之前时才调整
+        # 修复: 只有当最后交易日期早于当前日期时，才将结束日期调整为最后交易日期
         if to_date_dt > last_date_dt and last_date_dt < current_date_dt:
             to_date = last_date
             if not result_info['to_date_adjusted']:  # 避免重复添加调整信息
                 result_info['to_date_adjusted'] = True
                 result_info['message'].append(f"结束日期 {result_info['original_to_date']} 晚于股票最后交易日期 {last_date}，已调整为最后交易日期")
                 logger.info(f"结束日期 {result_info['original_to_date']} 晚于股票最后交易日期 {last_date}，已调整为最后交易日期")
+        elif to_date_dt > last_date_dt and last_date_dt >= current_date_dt:
+            # 当最后交易日期不早于当前日期时，记录一条信息但不调整日期
+            logger.info(f"结束日期 {to_date} 晚于股票最后交易日期 {last_date}，但最后交易日期不早于当前日期，不进行调整")
 
     except ValueError as e:
         logger.error(f"日期格式错误: {e}，将使用原始日期范围")

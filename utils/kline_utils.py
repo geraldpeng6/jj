@@ -72,13 +72,18 @@ def fetch_and_save_kline(
         if not user_id:
             return False, "错误: 无法获取认证信息", None
 
+        # 记录请求的原始日期范围
+        logger.info(f"请求的原始日期范围: 从 {from_date or '(未指定)'} 到 {to_date or '(未指定)'}")
+        
         # 验证并修复日期格式
         from_date, to_date = validate_date_range(from_date, to_date)
+        logger.info(f"日期格式验证后: 从 {from_date} 到 {to_date}")
         
         # 处理日期参数
         # 获取当前北京时间和日期
         current_dt = get_beijing_now()
         current_date = current_dt.strftime("%Y-%m-%d")
+        logger.info(f"当前北京时间: {current_dt.strftime('%Y-%m-%d %H:%M:%S')}")
         
         # 处理开始日期
         try:
@@ -95,9 +100,10 @@ def fetch_and_save_kline(
         try:
             to_date_dt = datetime.datetime.strptime(to_date, "%Y-%m-%d")
             to_date_ts = int(to_date_dt.timestamp() * 1000)
-            # 如果结束日期在未来，记录一条信息
+            # 如果结束日期在未来，记录详细信息
             if to_date_dt.date() > current_dt.date():
-                logger.info(f"请求的结束日期 {to_date} 在未来，实际可能只返回到当前日期 {current_date} 的数据")
+                days_in_future = (to_date_dt.date() - current_dt.date()).days
+                logger.info(f"请求的结束日期 {to_date} 在未来 {days_in_future} 天，API可能返回到当前日期 {current_date} 的数据")
         except (ValueError, TypeError):
             # 如果日期解析失败，使用当前日期
             to_date_dt = current_dt
@@ -126,6 +132,9 @@ def fetch_and_save_kline(
                 fq_date = to_date
                 fq_date_ts = to_date_ts
 
+        # 记录最终使用的日期参数
+        logger.info(f"最终使用的日期参数: 从 {from_date} 到 {to_date}, 复权基准日期: {fq_date}")
+        
         # 构建请求参数
         params = {
             "category": category,
@@ -174,12 +183,40 @@ def fetch_and_save_kline(
                 actual_end_date = df['time'].max().strftime('%Y-%m-%d')
                 logger.info(f"实际获取到的数据日期范围: {actual_start_date} 至 {actual_end_date}")
                 
-                # 如果请求的结束日期在未来，但实际数据没有达到今天，记录警告
-                if to_date > current_date and actual_end_date < current_date:
-                    logger.warning(f"请求了未来日期 {to_date}，但最新数据仅到 {actual_end_date}，可能是数据源尚未更新")
+                # 检查实际日期范围与请求日期范围的差异
+                if actual_start_date != from_date:
+                    logger.info(f"实际开始日期 {actual_start_date} 与请求的开始日期 {from_date} 不同")
+                
+                if actual_end_date != to_date and to_date_dt.date() <= current_dt.date():
+                    # 如果请求的结束日期不在未来，但实际结束日期不同，这可能是数据问题
+                    logger.warning(f"实际结束日期 {actual_end_date} 与请求的结束日期 {to_date} 不同，且请求日期不在未来")
+                
+                # 如果请求的结束日期在未来，检查实际数据是否更新到最近
+                if to_date_dt.date() > current_dt.date():
+                    days_diff = (current_dt.date() - datetime.datetime.strptime(actual_end_date, '%Y-%m-%d').date()).days
+                    if days_diff > 1:  # 如果差距超过1天
+                        logger.warning(f"请求了未来日期 {to_date}，但最新数据仅到 {actual_end_date}，与当前日期相差 {days_diff} 天，可能是数据源尚未更新")
+                    else:
+                        logger.info(f"数据已更新到接近当前日期: {actual_end_date}，请求的未来日期为 {to_date}")
 
                 # 按时间排序
                 df = df.sort_values('time')
+                
+                # 检查数据完整性 - 查找日期断点
+                if len(df) > 1:
+                    dates = pd.to_datetime(df['time'])
+                    date_diffs = (dates.shift(-1) - dates).dropna()
+                    
+                    # 检查超过1天的间隔
+                    gaps = date_diffs[date_diffs > pd.Timedelta(days=1)]
+                    if not gaps.empty:
+                        logger.warning(f"检测到 {len(gaps)} 个日期断点:")
+                        for i, gap in enumerate(gaps):
+                            idx = gaps.index[i]
+                            from_gap = df.loc[idx, 'time'].strftime('%Y-%m-%d')
+                            to_gap = df.loc[idx+1, 'time'].strftime('%Y-%m-%d')
+                            gap_days = gap.days
+                            logger.warning(f"断点 {i+1}: {from_gap} -> {to_gap} (间隔 {gap_days} 天)")
 
                 # 保存数据到文件
                 try:
