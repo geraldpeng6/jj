@@ -360,6 +360,24 @@ def find_task_by_params(
     return None
 
 
+def find_task_by_id(task_id: str) -> Optional[Dict[str, Any]]:
+    """
+    根据任务ID查找任务
+    
+    Args:
+        task_id: 任务ID
+        
+    Returns:
+        Optional[Dict[str, Any]]: 找到的任务数据，如果不存在则返回None
+    """
+    # 先从内存中查找
+    if task_id in RUNNING_BACKTESTS:
+        return RUNNING_BACKTESTS[task_id]
+        
+    # 从磁盘加载任务状态
+    return load_task_status(task_id)
+
+
 def cleanup_old_tasks(days: int = 30) -> None:
     """
     清理旧的任务记录

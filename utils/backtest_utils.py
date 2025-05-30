@@ -1065,20 +1065,38 @@ def format_choose_stock(symbol_str: str) -> str:
     Args:
         symbol_str: 股票代码字符串，可以是单个代码如"600000.XSHG"，
                    也可以是多个代码如"160632.XSHE&161029.XSHE"（使用&分隔）
+                   或者是不包含交易所后缀的代码如"600000"（自动添加后缀）
 
     Returns:
         str: 格式化后的choose_stock函数字符串
     """
     # 分割并清理股票代码（使用&作为分隔符）
     symbols = [s.strip() for s in symbol_str.split('&')]
+    formatted_symbols = []
+
+    # 处理每个股票代码，为缺少交易所代码的添加适当的后缀
+    for symbol in symbols:
+        if '.' not in symbol:
+            # 缺少交易所代码，根据股票代码自动添加
+            if symbol.startswith('6'):
+                # 6开头的为上交所股票
+                formatted_symbols.append(f"{symbol}.XSHG")
+                logger.info(f"为股票代码 {symbol} 自动添加上交所后缀: {symbol}.XSHG")
+            else:
+                # 其他为深交所股票
+                formatted_symbols.append(f"{symbol}.XSHE")
+                logger.info(f"为股票代码 {symbol} 自动添加深交所后缀: {symbol}.XSHE")
+        else:
+            # 已有交易所代码，直接使用
+            formatted_symbols.append(symbol)
 
     # 构建格式化的股票代码列表字符串
-    if len(symbols) == 1:
-        symbol_list_str = f'["{symbols[0]}"]'
+    if len(formatted_symbols) == 1:
+        symbol_list_str = f'["{formatted_symbols[0]}"]'
     else:
         # 对于多个股票，使用格式 ["000001.XSHG", "510300.XSHG"]
-        formatted_symbols = [f'"{symbol}"' for symbol in symbols]
-        symbol_list_str = f'[{", ".join(formatted_symbols)}]'
+        symbol_list_items = [f'"{symbol}"' for symbol in formatted_symbols]
+        symbol_list_str = f'[{", ".join(symbol_list_items)}]'
 
     return f'def choose_stock(context):\n    """标的"""\n    context.symbol_list = {symbol_list_str}\n'
 
@@ -1222,6 +1240,8 @@ def run_backtest(
         logger.info(f"当前北京时间: {current_date.strftime('%Y-%m-%d %H:%M:%S')}")
         
         # 验证日期格式
+        from utils.date_utils import validate_date_range
+        from utils.symbol_utils import validate_date_range as validate_symbol_date_range
         start_date_fmt, end_date_fmt = validate_date_range(start_date, end_date)
         
         # 记录格式验证后的日期

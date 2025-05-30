@@ -10,7 +10,57 @@
 import os
 import logging
 import time
+import sys
 from logging.handlers import RotatingFileHandler
+
+
+def configure_root_logger(log_level=logging.INFO, log_dir='data/logs'):
+    """
+    配置根日志记录器，确保所有模块的日志都能正确输出到文件
+
+    Args:
+        log_level: 日志级别，默认为INFO
+        log_dir: 日志根目录，默认为'data/logs'
+
+    Returns:
+        logging.Logger: 配置好的根日志记录器
+    """
+    # 确保日志根目录存在
+    os.makedirs(log_dir, exist_ok=True)
+    
+    # 获取根日志记录器
+    root_logger = logging.getLogger()
+    root_logger.setLevel(log_level)
+    
+    # 如果已经有处理器，先移除所有处理器
+    if root_logger.handlers:
+        for handler in root_logger.handlers[:]:
+            root_logger.removeHandler(handler)
+    
+    # 创建日志文件路径
+    log_file = os.path.join(log_dir, 'root.log')
+    
+    # 创建文件处理器
+    file_handler = RotatingFileHandler(
+        log_file,
+        maxBytes=10485760,  # 10MB
+        backupCount=5,
+        encoding='utf-8'
+    )
+    
+    # 设置日志格式
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    file_handler.setFormatter(formatter)
+    
+    # 添加处理器到记录器
+    root_logger.addHandler(file_handler)
+    
+    # 配置一个控制台处理器，让日志也输出到控制台
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setFormatter(formatter)
+    root_logger.addHandler(console_handler)
+    
+    return root_logger
 
 
 def setup_logging(logger_name, log_level=logging.INFO, log_dir='data/logs', max_bytes=10485760, backup_count=5):
@@ -34,9 +84,10 @@ def setup_logging(logger_name, log_level=logging.INFO, log_dir='data/logs', max_
     logger = logging.getLogger(logger_name)
     logger.setLevel(log_level)
 
-    # 如果已经有处理器，不再添加
+    # 如果已经有处理器，清除所有处理器
     if logger.handlers:
-        return logger
+        for handler in logger.handlers[:]:
+            logger.removeHandler(handler)
 
     # 解析logger_name，提取功能模块名称
     # 例如从 'quant_mcp.backtest_tools' 提取 'backtest'

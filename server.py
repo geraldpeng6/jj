@@ -12,13 +12,24 @@ import os
 import inspect
 from mcp.server.fastmcp import FastMCP
 
-from utils.logging_utils import setup_logging
+# 首先设置一个标志，防止其他库重新配置根日志记录器
+logging.root.handlers = [logging.NullHandler()]
+# 确保根记录器已配置，防止其他库重新配置
+logging._srcfile = None
+logging.logThreads = 0
+logging.logProcesses = 0
+logging._handlerList = []  # 重置处理程序列表
+
+from utils.logging_utils import setup_logging, configure_root_logger
 from utils.html_server import generate_test_html, is_nginx_available
 from src.tools import register_all_tools
 from src.resources import register_all_resources
 from src.prompts import register_all_prompts
 
-# 设置日志
+# 配置根日志记录器，确保所有模块的日志都能正确输出到文件
+root_logger = configure_root_logger(log_level=logging.INFO)
+
+# 设置特定模块的日志
 logger = setup_logging('quant_mcp.server')
 
 def create_server(name: str = "量化交易助手") -> FastMCP:
