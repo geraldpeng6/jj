@@ -135,4 +135,4 @@ def patch_fastmcp():
     if not hasattr(FastMCP, 'register_prompt_with_metadata'):
         setattr(FastMCP, 'register_prompt_with_metadata',
                 lambda self, name, handler, metadata: register_prompt_with_metadata(self, name, handler, metadata))
-        logger.info("已为FastMCP类添加register_prompt_with_metadata方法")
+        logger.info("已为FastMCP类添加register_prompt_with_metadata方法") 

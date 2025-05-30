@@ -133,7 +133,7 @@ async def run_strategy_backtest(
         strategy_name = None
         
         # 首先尝试从用户策略库获取
-        user_strategy = get_strategy_detail(strategy_id, "user")
+        user_strategy = get_strategy_detail(strategy_id)
         if user_strategy:
             # 优先使用用户策略的名称
             strategy_name = user_strategy.get('name') or user_strategy.get('strategy_name')
@@ -146,7 +146,10 @@ async def run_strategy_backtest(
         # 如果没有从用户策略获取到名称，尝试从策略库获取
         if not strategy_name:
             # 尝试从系统策略库获取
-            library_strategy = get_strategy_detail(strategy_id, "library")
+            # 注意: 实际上get_strategy_detail已经自动检查了用户策略和策略库
+            # 这段代码不会被执行，因为get_strategy_detail已经返回了所有可能的结果
+            # 保留这段代码是为了向后兼容
+            library_strategy = None  # 不需要再次调用get_strategy_detail
             if library_strategy:
                 strategy_name = library_strategy.get('name') or library_strategy.get('strategy_name')
                 logger.info(f"从系统策略库获取到策略名称: {strategy_name}")

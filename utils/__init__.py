@@ -35,4 +35,9 @@ from utils.backtest_manager import (
     cleanup_old_tasks
 )
 
-# 提示模板相关工具函数已移至src/utils/prompt_utils.py
+# 导入提示模板相关工具函数
+from utils.prompt_utils import (
+    update_prompt_metadata,
+    register_prompt_with_metadata,
+    patch_fastmcp
+)

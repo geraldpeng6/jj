@@ -348,10 +348,12 @@ def setup_nginx() -> Tuple[bool, str]:
             logger.info(f"Nginx配置已保存到: {config_path}")
         except PermissionError:
             logger.warning(f"无权限写入配置文件: {config_path}，尝试使用临时文件")
-            # 如果没有权限，则保存到当前目录
-            with open("mcp_html_server.conf", 'w') as f:
+            # 如果没有权限，则保存到配置目录
+            local_config_path = os.path.join("data", "config", "mcp_html_server.conf")
+            os.makedirs(os.path.dirname(local_config_path), exist_ok=True)
+            with open(local_config_path, 'w') as f:
                 f.write(nginx_config)
-            return False, f"无权限写入配置文件: {config_path}，已保存到当前目录的mcp_html_server.conf文件，请手动复制到Nginx配置目录"
+            return False, f"无权限写入配置文件: {config_path}，已保存到{local_config_path}文件，请手动复制到Nginx配置目录"
 
         # 测试配置
         try:
