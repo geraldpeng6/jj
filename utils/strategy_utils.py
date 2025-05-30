@@ -245,6 +245,139 @@ def delete_strategy(strategy_id: str) -> requests.Response:
         return None
 
 
+def create_user_strategy(strategy_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """
+    创建用户策略
+
+    Args:
+        strategy_data: 策略数据，包含strategy_name, indicator, choose_stock, timing, control_risk等字段
+
+    Returns:
+        Optional[Dict[str, Any]]: 创建结果，包含strategy_id字段，创建失败时返回None
+    """
+    # 加载认证配置
+    if not load_auth_config():
+        return None
+
+    # 获取认证信息
+    _, user_id = get_auth_info()
+    if not user_id:
+        logger.error("错误: 无法获取认证信息")
+        return None
+
+    # 构建URL和请求参数
+    url = f"{BASE_URL}/trader-service/strategy/user-strategy"
+    params = {"user_id": user_id}
+    headers = get_headers()
+    
+    # 确保请求数据包含user_id
+    strategy_data["user_id"] = user_id
+    
+    # 确保有策略名称
+    if "strategy_name" not in strategy_data or not strategy_data["strategy_name"]:
+        strategy_data["strategy_name"] = "未命名策略"
+    
+    # 添加禁用压缩响应的头部
+    headers['Accept-Encoding'] = 'identity'  # 禁用压缩响应
+
+    try:
+        # 使用POST请求创建策略
+        response = requests.post(url, params=params, json=strategy_data, headers=headers)
+        response.raise_for_status()
+        result = response.json()
+
+        if result.get('code') == 1 and result.get('msg') == 'ok':
+            logger.info(f"创建策略成功: {strategy_data.get('strategy_name')}")
+            # 返回创建结果，包含strategy_id
+            return result.get('data', {})
+        else:
+            logger.error(f"创建策略失败: {result.get('msg', '未知错误')}")
+            return None
+
+    except requests.exceptions.RequestException as e:
+        logger.error(f"创建策略请求失败: {e}")
+        return None
+    except json.JSONDecodeError as e:
+        logger.error(f"解析创建策略响应JSON失败: {e}")
+        return None
+    except Exception as e:
+        logger.error(f"创建策略时发生未知错误: {e}")
+        return None
+
+
+def update_user_strategy(strategy_data: Dict[str, Any]) -> bool:
+    """
+    更新用户策略，包含预检查确保策略存在
+
+    Args:
+        strategy_data: 策略数据，必须包含strategy_id字段
+
+    Returns:
+        bool: 更新是否成功
+    """
+    # 加载认证配置
+    if not load_auth_config():
+        return False
+
+    # 获取认证信息
+    _, user_id = get_auth_info()
+    if not user_id:
+        logger.error("错误: 无法获取认证信息")
+        return False
+    
+    # 检查必要参数
+    if "strategy_id" not in strategy_data or not strategy_data["strategy_id"]:
+        logger.error("错误: 更新策略时缺少strategy_id")
+        return False
+    
+    strategy_id = strategy_data["strategy_id"]
+    
+    # 先检查策略是否存在
+    existing_strategy = get_strategy_detail(strategy_id)
+    if not existing_strategy:
+        logger.error(f"错误: 策略ID {strategy_id} 不存在，无法更新")
+        return False
+    
+    # 如果不是用户策略，无法更新
+    if existing_strategy.get("strategy_group") != "user":
+        logger.error(f"错误: 策略ID {strategy_id} 不是用户策略，无法更新")
+        return False
+
+    # 构建URL和请求参数
+    url = f"{BASE_URL}/trader-service/strategy/user-strategy"
+    params = {"user_id": user_id}
+    headers = get_headers()
+    
+    # 确保请求数据包含user_id
+    strategy_data["user_id"] = user_id
+    
+    # 添加禁用压缩响应的头部
+    headers['Accept-Encoding'] = 'identity'  # 禁用压缩响应
+
+    try:
+        # 使用PUT请求更新策略
+        response = requests.put(url, params=params, json=strategy_data, headers=headers)
+        response.raise_for_status()
+        result = response.json()
+
+        if result.get('code') == 1 and result.get('msg') == 'ok':
+            logger.info(f"更新策略成功，策略ID: {strategy_id}")
+            return True
+        else:
+            logger.error(f"更新策略失败: {result.get('msg', '未知错误')}")
+            return False
+
+    except requests.exceptions.RequestException as e:
+        logger.error(f"更新策略请求失败: {e}")
+        return False
+    except json.JSONDecodeError as e:
+        logger.error(f"解析更新策略响应JSON失败: {e}")
+        return False
+    except Exception as e:
+        logger.error(f"更新策略时发生未知错误: {e}")
+        return False
+
+
 
 
 

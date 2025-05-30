@@ -1,0 +1,189 @@
+{
+  "resources": [
+    {
+      "uri": "quant://syntax/6. 量化编程技巧",
+      "name": "6. 量化编程技巧",
+      "description": "Syntax documentation: 6. 量化编程技巧",
+      "path": "data/mcp_resources/6. 量化编程技巧.md",
+      "metadata": {
+        "title": "6. 量化编程技巧",
+        "type": "syntax",
+        "source": "data/帮助文档/语法手册/6. 量化编程技巧.docx",
+        "format": "markdown"
+      }
+    },
+    {
+      "uri": "quant://syntax/5. 功能代码集合",
+      "name": "5. 功能代码集合",
+      "description": "Syntax documentation: 5. 功能代码集合",
+      "path": "data/mcp_resources/5. 功能代码集合.md",
+      "metadata": {
+        "title": "5. 功能代码集合",
+        "type": "syntax",
+        "source": "data/帮助文档/语法手册/5. 功能代码集合.docx",
+        "format": "markdown"
+      }
+    },
+    {
+      "uri": "quant://syntax/归一化法",
+      "name": "归一化法",
+      "description": "Syntax documentation: 归一化法",
+      "path": "data/mcp_resources/归一化法.md",
+      "metadata": {
+        "title": "归一化法",
+        "type": "syntax",
+        "source": "data/帮助文档/语法手册/归一化法.docx",
+        "format": "markdown"
+      }
+    },
+    {
+      "uri": "quant://syntax/分位数法",
+      "name": "分位数法",
+      "description": "Syntax documentation: 分位数法",
+      "path": "data/mcp_resources/分位数法.md",
+      "metadata": {
+        "title": "分位数法",
+        "type": "syntax",
+        "source": "data/帮助文档/语法手册/分位数法.docx",
+        "format": "markdown"
+      }
+    },
+    {
+      "uri": "quant://syntax/1. 常用语法",
+      "name": "1. 常用语法",
+      "description": "Syntax documentation: 1. 常用语法",
+      "path": "data/mcp_resources/1. 常用语法.md",
+      "metadata": {
+        "title": "1. 常用语法",
+        "type": "syntax",
+        "source": "data/帮助文档/语法手册/1. 常用语法.docx",
+        "format": "markdown"
+      }
+    },
+    {
+      "uri": "quant://syntax/均值偏离法",
+      "name": "均值偏离法",
+      "description": "Syntax documentation: 均值偏离法",
+      "path": "data/mcp_resources/均值偏离法.md",
+      "metadata": {
+        "title": "均值偏离法",
+        "type": "syntax",
+        "source": "data/帮助文档/语法手册/均值偏离法.docx",
+        "format": "markdown"
+      }
+    },
+    {
+      "uri": "quant://syntax/3. 策略规划",
+      "name": "3. 策略规划",
+      "description": "Syntax documentation: 3. 策略规划",
+      "path": "data/mcp_resources/3. 策略规划.md",
+      "metadata": {
+        "title": "3. 策略规划",
+        "type": "syntax",
+        "source": "data/帮助文档/语法手册/3. 策略规划.docx",
+        "format": "markdown"
+      }
+    },
+    {
+      "uri": "quant://syntax/_4. 代码框架",
+      "name": "_4. 代码框架",
+      "description": "Syntax documentation: _4. 代码框架",
+      "path": "data/mcp_resources/_4. 代码框架.md",
+      "metadata": {
+        "title": "_4. 代码框架",
+        "type": "syntax",
+        "source": "data/帮助文档/语法手册/_4. 代码框架.docx",
+        "format": "markdown"
+      }
+    },
+    {
+      "uri": "quant://syntax/2. 常用指标",
+      "name": "2. 常用指标",
+      "description": "Syntax documentation: 2. 常用指标",
+      "path": "data/mcp_resources/2. 常用指标.md",
+      "metadata": {
+        "title": "2. 常用指标",
+        "type": "syntax",
+        "source": "data/帮助文档/语法手册/2. 常用指标.docx",
+        "format": "markdown"
+      }
+    },
+    {
+      "uri": "quant://data/交易日数据",
+      "name": "交易日数据",
+      "description": "Data documentation: 交易日数据",
+      "path": "data/mcp_resources/交易日数据.md",
+      "metadata": {
+        "title": "交易日数据",
+        "type": "data",
+        "source": "data/帮助文档/数据文档/交易日数据.docx",
+        "format": "markdown"
+      }
+    },
+    {
+      "uri": "quant://data/数据文档",
+      "name": "数据文档",
+      "description": "Data documentation: 数据文档",
+      "path": "data/mcp_resources/数据文档.md",
+      "metadata": {
+        "title": "数据文档",
+        "type": "data",
+        "source": "data/帮助文档/数据文档/数据文档.docx",
+        "format": "markdown"
+      }
+    },
+    {
+      "uri": "quant://data/标的相关数据",
+      "name": "标的相关数据",
+      "description": "Data documentation: 标的相关数据",
+      "path": "data/mcp_resources/标的相关数据.md",
+      "metadata": {
+        "title": "标的相关数据",
+        "type": "data",
+        "source": "data/帮助文档/数据文档/标的相关数据.docx",
+        "format": "markdown"
+      }
+    },
+    {
+      "uri": "quant://data/行业数据",
+      "name": "行业数据",
+      "description": "Data documentation: 行业数据",
+      "path": "data/mcp_resources/行业数据.md",
+      "metadata": {
+        "title": "行业数据",
+        "type": "data",
+        "source": "data/帮助文档/数据文档/行业数据.docx",
+        "format": "markdown"
+      }
+    },
+    {
+      "uri": "quant://data/基本面数据",
+      "name": "基本面数据",
+      "description": "Data documentation: 基本面数据",
+      "path": "data/mcp_resources/基本面数据.md",
+      "metadata": {
+        "title": "基本面数据",
+        "type": "data",
+        "source": "data/帮助文档/数据文档/基本面数据.docx",
+        "format": "markdown"
+      }
+    },
+    {
+      "uri": "quant://data/历史数据",
+      "name": "历史数据",
+      "description": "Data documentation: 历史数据",
+      "path": "data/mcp_resources/历史数据.md",
+      "metadata": {
+        "title": "历史数据",
+        "type": "data",
+        "source": "data/帮助文档/数据文档/历史数据.docx",
+        "format": "markdown"
+      }
+    }
+  ],
+  "resource_count": 15,
+  "resource_types": [
+    "syntax",
+    "data"
+  ]
+}

@@ -15,7 +15,9 @@ from mcp.server.fastmcp import FastMCP
 from utils.strategy_utils import (
     get_strategy_list,
     get_strategy_detail,
-    delete_strategy
+    delete_strategy,
+    create_user_strategy,
+    update_user_strategy
 )
 
 # 获取日志记录器
@@ -179,6 +181,102 @@ async def delete_user_strategy(strategy_id: str) -> str:
         return f"删除策略时发生错误: {e}"
 
 
+async def create_strategy(strategy_name: str, choose_stock: str, indicator: str, timing: str, control_risk: str = "def control_risk(context):\n    pass\n") -> str:
+    """
+    创建用户策略
+
+    Args:
+        strategy_name: 策略名称
+        choose_stock: 选股代码
+        indicator: 指标代码
+        timing: 择时代码
+        control_risk: 风控代码，默认为空实现
+
+    Returns:
+        str: 创建结果信息，或错误信息
+    """
+    try:
+        # 构建策略数据
+        strategy_data = {
+            "strategy_name": strategy_name,
+            "choose_stock": choose_stock,
+            "indicator": indicator,
+            "timing": timing,
+            "control_risk": control_risk,
+            "strategy_id": ""  # 新建策略时，strategy_id为空
+        }
+
+        # 调用utils模块创建策略
+        result = create_user_strategy(strategy_data)
+
+        if not result:
+            return "创建策略失败，请检查策略代码或网络连接"
+
+        strategy_id = result.get("strategy_id", "未获取到策略ID")
+
+        # 格式化输出
+        result_str = f"创建策略成功: {strategy_name}\n\n"
+        result_str += f"策略ID: {strategy_id}\n"
+        
+        return result_str
+
+    except Exception as e:
+        logger.error(f"创建策略时发生错误: {e}")
+        return f"创建策略时发生错误: {e}"
+
+
+async def update_strategy(strategy_id: str, strategy_name: str, choose_stock: str, indicator: str, timing: str, control_risk: str = "def control_risk(context):\n    pass\n") -> str:
+    """
+    更新用户策略
+
+    Args:
+        strategy_id: 策略ID
+        strategy_name: 策略名称
+        choose_stock: 选股代码
+        indicator: 指标代码
+        timing: 择时代码
+        control_risk: 风控代码，默认为空实现
+
+    Returns:
+        str: 更新结果信息，或错误信息
+    """
+    try:
+        # 首先获取策略详情，确保策略存在
+        strategy_detail = get_strategy_detail(strategy_id)
+        if not strategy_detail:
+            return f"更新策略失败: 找不到策略ID {strategy_id}"
+
+        # 检查策略是否为用户策略
+        if strategy_detail.get("strategy_group") != "user":
+            return f"更新策略失败: 策略ID {strategy_id} 不是用户策略，无法更新"
+
+        # 构建策略数据
+        strategy_data = {
+            "strategy_id": strategy_id,
+            "strategy_name": strategy_name,
+            "choose_stock": choose_stock,
+            "indicator": indicator,
+            "timing": timing,
+            "control_risk": control_risk
+        }
+
+        # 调用utils模块更新策略
+        success = update_user_strategy(strategy_data)
+
+        if not success:
+            return f"更新策略失败: 策略ID {strategy_id}"
+
+        # 格式化输出
+        result_str = f"成功更新策略: {strategy_name}\n\n"
+        result_str += f"策略ID: {strategy_id}\n"
+
+        return result_str
+
+    except Exception as e:
+        logger.error(f"更新策略时发生错误: {e}")
+        return f"更新策略时发生错误: {e}"
+
+
 def register_tools(mcp: FastMCP):
     """
     注册策略相关的工具到MCP服务器
@@ -194,3 +292,9 @@ def register_tools(mcp: FastMCP):
 
     # 注册删除策略工具
     mcp.tool()(delete_user_strategy)
+    
+    # 注册创建策略工具
+    mcp.tool()(create_strategy)
+    
+    # 注册更新策略工具
+    mcp.tool()(update_strategy)

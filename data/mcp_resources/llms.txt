@@ -1,0 +1,26 @@
+# 量化交易系统文档
+
+这是一个量化交易系统的文档集合，包含了语法手册和数据文档。
+
+## 可用资源
+
+### Syntax
+
+- [6. 量化编程技巧](quant://syntax/6. 量化编程技巧): Syntax documentation: 6. 量化编程技巧
+- [5. 功能代码集合](quant://syntax/5. 功能代码集合): Syntax documentation: 5. 功能代码集合
+- [归一化法](quant://syntax/归一化法): Syntax documentation: 归一化法
+- [分位数法](quant://syntax/分位数法): Syntax documentation: 分位数法
+- [1. 常用语法](quant://syntax/1. 常用语法): Syntax documentation: 1. 常用语法
+- [均值偏离法](quant://syntax/均值偏离法): Syntax documentation: 均值偏离法
+- [3. 策略规划](quant://syntax/3. 策略规划): Syntax documentation: 3. 策略规划
+- [_4. 代码框架](quant://syntax/_4. 代码框架): Syntax documentation: _4. 代码框架
+- [2. 常用指标](quant://syntax/2. 常用指标): Syntax documentation: 2. 常用指标
+
+### Data
+
+- [交易日数据](quant://data/交易日数据): Data documentation: 交易日数据
+- [数据文档](quant://data/数据文档): Data documentation: 数据文档
+- [标的相关数据](quant://data/标的相关数据): Data documentation: 标的相关数据
+- [行业数据](quant://data/行业数据): Data documentation: 行业数据
+- [基本面数据](quant://data/基本面数据): Data documentation: 基本面数据
+- [历史数据](quant://data/历史数据): Data documentation: 历史数据
