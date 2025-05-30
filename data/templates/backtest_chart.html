@@ -237,9 +237,14 @@
         </div>
     </div>
 
+    <script type="application/json" id="chart-data">
+        {{ chart_data|safe }}
+    </script>
+    
     <script>
         // 解析JSON数据
-        const chartData = {{ chart_data|safe }};
+        const chartDataElement = document.getElementById('chart-data');
+        const chartData = JSON.parse(chartDataElement.textContent);
 
         // 初始化资产价值图表
         const valueChartDom = document.getElementById('value-chart');
