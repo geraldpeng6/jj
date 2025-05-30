@@ -11,7 +11,7 @@ import logging
 from typing import Dict, Any, List, Optional
 from pydantic import Field
 from mcp.server.fastmcp import FastMCP
-from mcp.types import PromptMessage, TextContent, EmbeddedResource, TextResourceContents
+from mcp.types import PromptMessage, TextContent
 
 # 获取日志记录器
 logger = logging.getLogger('quant_mcp.technical_prompts')
@@ -47,9 +47,6 @@ def register_prompts(mcp: FastMCP):
         Returns:
             List[PromptMessage]: 提示消息列表
         """
-        # 构建资源URI
-        resource_uri = f"kline://{exchange}/{symbol}/{timeframe}"
-        
         # 时间周期映射
         timeframe_map = {
             "daily": "日线",
@@ -75,19 +72,8 @@ def register_prompts(mcp: FastMCP):
                     f"6. 具体的交易建议（买入、卖出、持有）\n"
                     f"7. 止损和止盈位置建议\n"
                     f"8. 技术分析的局限性和风险提示\n\n"
-                    f"请提供详细的分析，并解释各指标的计算方法和信号含义。"
-                )
-            ),
-            # 添加资源消息
-            PromptMessage(
-                role="user",
-                content=EmbeddedResource(
-                    type="resource",
-                    resource=TextResourceContents(
-                        uri=resource_uri,
-                        mimeType="text/csv",
-                        text=""  # 添加必需的text字段
-                    )
+                    f"请提供详细的分析，并解释各指标的计算方法和信号含义。\n\n"
+                    f"请注意：由于数据资源已被移除，您将需要使用其他数据源或提供数据进行分析。"
                 )
             )
         ]
@@ -117,9 +103,6 @@ def register_prompts(mcp: FastMCP):
         Returns:
             List[PromptMessage]: 提示消息列表
         """
-        # 构建资源URI
-        resource_uri = f"kline://{exchange}/{symbol}/{timeframe}"
-        
         # 形态类型映射
         pattern_map = {
             "reversal": "反转形态",
@@ -144,19 +127,8 @@ def register_prompts(mcp: FastMCP):
                     f"6. 配合成交量的形态确认\n"
                     f"7. 基于形态分析的交易策略建议\n"
                     f"8. 多个时间周期的形态协同分析\n\n"
-                    f"请详细描述每个识别出的形态，并提供形成原因、确认条件和交易建议。"
-                )
-            ),
-            # 添加资源消息
-            PromptMessage(
-                role="user",
-                content=EmbeddedResource(
-                    type="resource",
-                    resource=TextResourceContents(
-                        uri=resource_uri,
-                        mimeType="text/csv",
-                        text=""  # 添加必需的text字段
-                    )
+                    f"请详细描述每个识别出的形态，并提供形成原因、确认条件和交易建议。\n\n"
+                    f"请注意：由于数据资源已被移除，您将需要使用其他数据源或提供数据进行分析。"
                 )
             )
         ]
@@ -186,9 +158,6 @@ def register_prompts(mcp: FastMCP):
         Returns:
             List[PromptMessage]: 提示消息列表
         """
-        # 构建资源URI
-        resource_uri = f"kline://{exchange}/{symbol}/{timeframe}"
-        
         # 构建提示消息
         messages = [
             PromptMessage(
@@ -207,19 +176,8 @@ def register_prompts(mcp: FastMCP):
                     f"7. 动量指标对趋势的确认或背离\n"
                     f"8. 趋势变化的早期信号\n"
                     f"9. 基于趋势分析的交易策略建议\n\n"
-                    f"请提供详细的趋势分析，并解释各种趋势特征的意义和交易含义。"
-                )
-            ),
-            # 添加资源消息
-            PromptMessage(
-                role="user",
-                content=EmbeddedResource(
-                    type="resource",
-                    resource=TextResourceContents(
-                        uri=resource_uri,
-                        mimeType="text/csv",
-                        text=""  # 添加必需的text字段
-                    )
+                    f"请提供详细的趋势分析，并解释各种趋势特征的意义和交易含义。\n\n"
+                    f"请注意：由于数据资源已被移除，您将需要使用其他数据源或提供数据进行分析。"
                 )
             )
         ]

@@ -11,7 +11,7 @@ import logging
 from typing import Dict, Any, List, Optional
 from pydantic import Field
 from mcp.server.fastmcp import FastMCP
-from mcp.types import PromptMessage, TextContent, EmbeddedResource, TextResourceContents
+from mcp.types import PromptMessage, TextContent
 
 # 获取日志记录器
 logger = logging.getLogger('quant_mcp.strategy_prompts')

@@ -4,14 +4,14 @@
 """
 基本面分析提示模块
 
-提供基本面分析相关的MCP提示模板，包括财务分析、估值分析和公司研究等
+提供基本面分析相关的MCP提示模板，包括财务分析、估值分析、公司研究等
 """
 
 import logging
 from typing import Dict, Any, List, Optional
 from pydantic import Field
 from mcp.server.fastmcp import FastMCP
-from mcp.types import PromptMessage, TextContent, EmbeddedResource, TextResourceContents
+from mcp.types import PromptMessage, TextContent
 
 # 获取日志记录器
 logger = logging.getLogger('quant_mcp.fundamental_prompts')
@@ -47,9 +47,6 @@ def register_prompts(mcp: FastMCP):
         Returns:
             List[PromptMessage]: 提示消息列表
         """
-        # 构建资源URI
-        resource_uri = f"fundamental://{exchange}/{symbol}/financials"
-        
         # 报表类型映射
         report_map = {
             "latest": "最新",
@@ -84,19 +81,8 @@ def register_prompts(mcp: FastMCP):
                     f"6. 财务风险评估\n"
                     f"7. 财务造假风险筛查\n"
                     f"8. 基于财务分析的投资建议\n\n"
-                    f"请提供详细的财务分析，并解释各项指标的含义和投资意义。"
-                )
-            ),
-            # 添加资源消息
-            PromptMessage(
-                role="user",
-                content=EmbeddedResource(
-                    type="resource",
-                    resource=TextResourceContents(
-                        uri=resource_uri,
-                        mimeType="application/json",
-                        text=""  # 添加必需的text字段
-                    )
+                    f"请提供详细的财务分析，并解释各项指标的含义和投资意义。\n\n"
+                    f"请注意：由于数据资源已被移除，您将需要使用其他数据源或提供数据进行分析。"
                 )
             )
         ]
@@ -126,9 +112,6 @@ def register_prompts(mcp: FastMCP):
         Returns:
             List[PromptMessage]: 提示消息列表
         """
-        # 构建资源URI
-        resource_uri = f"fundamental://{exchange}/{symbol}/valuation"
-        
         # 估值方法映射
         method_map = {
             "pe": "市盈率",
@@ -164,19 +147,8 @@ def register_prompts(mcp: FastMCP):
                     f"6. 贴现现金流模型分析（如适用）\n"
                     f"7. 合理价值区间估计\n"
                     f"8. 基于估值的投资建议和目标价\n\n"
-                    f"请提供详细的估值分析，并解释各估值方法的优缺点和适用条件。"
-                )
-            ),
-            # 添加资源消息
-            PromptMessage(
-                role="user",
-                content=EmbeddedResource(
-                    type="resource",
-                    resource=TextResourceContents(
-                        uri=resource_uri,
-                        mimeType="application/json",
-                        text=""  # 添加必需的text字段
-                    )
+                    f"请提供详细的估值分析，并解释各估值方法的优缺点和适用条件。\n\n"
+                    f"请注意：由于数据资源已被移除，您将需要使用其他数据源或提供数据进行分析。"
                 )
             )
         ]
@@ -206,9 +178,6 @@ def register_prompts(mcp: FastMCP):
         Returns:
             List[PromptMessage]: 提示消息列表
         """
-        # 构建资源URI
-        resource_uri = f"fundamental://{exchange}/{symbol}/company"
-        
         # 研究深度映射
         depth_map = {
             "brief": "简要",
@@ -237,27 +206,15 @@ def register_prompts(mcp: FastMCP):
                     f"研究报告应包括：\n"
                     f"1. 公司概况和发展历史\n"
                     f"2. 业务模式和收入构成\n"
-                    f"3. 行业地位和竞争优势\n"
-                    f"4. 财务状况和趋势分析\n"
-                    f"5. 管理团队评估\n"
-                    f"6. 成长驱动因素和战略方向\n"
-                    f"7. 主要风险因素\n"
-                    f"8. 潜在催化剂\n"
-                    f"9. 估值分析和合理价值\n"
-                    f"10. 投资评级和建议\n\n"
-                    f"请提供{depth_map.get(research_depth, '全面')}的分析，并尽可能引用最新的公司数据和行业信息。"
-                )
-            ),
-            # 添加资源消息
-            PromptMessage(
-                role="user",
-                content=EmbeddedResource(
-                    type="resource",
-                    resource=TextResourceContents(
-                        uri=resource_uri,
-                        mimeType="application/json",
-                        text=""  # 添加必需的text字段
-                    )
+                    f"3. 行业分析和竞争格局\n"
+                    f"4. 核心竞争力和发展战略\n"
+                    f"5. 管理团队背景和股权结构\n"
+                    f"6. 财务分析和质量评估\n"
+                    f"7. 潜在风险因素\n"
+                    f"8. 投资亮点和催化剂\n"
+                    f"9. 估值分析和投资建议\n\n"
+                    f"请提供详细的公司研究，并根据研究深度调整内容详细程度。\n\n"
+                    f"请注意：由于数据资源已被移除，您将需要使用其他数据源或提供数据进行分析。"
                 )
             )
         ]

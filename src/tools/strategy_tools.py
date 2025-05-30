@@ -22,12 +22,12 @@ from utils.strategy_utils import (
 logger = logging.getLogger('quant_mcp.strategy_tools')
 
 
-async def list_strategies(strategy_group: str = "user") -> str:
+async def list_strategies(strategy_group: str = "library") -> str:
     """
     获取策略列表
 
     Args:
-        strategy_group: 策略组类型，"user"表示用户策略，"library"表示策略库策略，默认为"user"
+        strategy_group: 策略组类型，"user"表示用户策略，"library"表示策略库策略，默认为"library"
 
     Returns:
         str: 格式化的策略列表信息，或错误信息
@@ -60,23 +60,25 @@ async def list_strategies(strategy_group: str = "user") -> str:
         return f"获取策略列表时发生错误: {e}"
 
 
-async def get_strategy(strategy_id: str, strategy_group: str = "user") -> str:
+async def get_strategy(strategy_id: str) -> str:
     """
-    获取策略详情
+    获取策略详情，自动检查用户策略和策略库
 
     Args:
         strategy_id: 策略ID
-        strategy_group: 策略组类型，"user"表示用户策略，"library"表示策略库策略，默认为"user"
 
     Returns:
         str: 格式化的策略详情信息，或错误信息
     """
     try:
-        # 从utils模块获取策略详情
-        strategy_detail = get_strategy_detail(strategy_id, strategy_group)
+        # 从utils模块获取策略详情，自动检查两个库
+        strategy_detail = get_strategy_detail(strategy_id)
 
         if not strategy_detail:
-            return f"获取策略详情失败，策略ID: {strategy_id}"
+            return f"获取策略详情失败，策略ID: {strategy_id}，该策略在用户策略和策略库中均未找到"
+
+        # 获取策略组类型
+        strategy_group = strategy_detail.get('strategy_group', '未知')
 
         # 格式化输出
         result_str = f"策略详情 - {strategy_detail.get('strategy_name', '未命名策略')}\n\n"
@@ -128,12 +130,6 @@ async def get_strategy(strategy_id: str, strategy_group: str = "user") -> str:
         return f"获取策略详情时发生错误: {e}"
 
 
-
-
-
-
-
-
 async def delete_user_strategy(strategy_id: str) -> str:
     """
     删除用户策略
@@ -146,9 +142,13 @@ async def delete_user_strategy(strategy_id: str) -> str:
     """
     try:
         # 首先获取策略详情，确保策略存在
-        strategy_detail = get_strategy_detail(strategy_id, "user")
+        strategy_detail = get_strategy_detail(strategy_id)
         if not strategy_detail:
             return f"删除策略失败: 找不到策略ID {strategy_id}"
+
+        # 检查策略是否为用户策略
+        if strategy_detail.get("strategy_group") != "user":
+            return f"删除策略失败: 策略ID {strategy_id} 不是用户策略，无法删除"
 
         strategy_name = strategy_detail.get("strategy_name", "未命名策略")
 
@@ -177,9 +177,6 @@ async def delete_user_strategy(strategy_id: str) -> str:
     except Exception as e:
         logger.error(f"删除策略时发生错误: {e}")
         return f"删除策略时发生错误: {e}"
-
-
-
 
 
 def register_tools(mcp: FastMCP):

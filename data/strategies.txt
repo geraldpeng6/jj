@@ -1,0 +1,3132 @@
+策略详情 - 单均线策略
+
+基本信息:
+- ID: RvK9lMrkgjaOxY8m2oJBV3GEb6qmX1eZ
+- 名称: 单均线策略
+- 类型: 策略库策略
+
+策略代码:
+
+选股代码:
+```python
+def choose_stock(context):
+    """标的"""
+    context.symbol_list = ["600000.XSHG"]
+
+`````
+
+指标代码:
+```python
+def indicators(context):
+    """指标"""
+    # 计算15日的均价，赋值给变量context.sma
+    context.sma = SMA(period=15)
+
+```
+
+择时代码:
+```python
+def timing(context):
+    """择时"""
+    # 判断是否持仓，如果不持仓，则判断是否出现买入信号
+    if not context.position:
+        # 当股票收盘价上升并且交叉穿过15日均价时，出现买入信号
+        if context.data.close[-1] < context.sma[-1] and context.data.close[0] > context.sma[0]:
+            # 买入信号出现时，发送买入指令，系统自动执行买入交易
+            context.order = context.buy(price=context.data.close[0]*1.1)
+
+    # 如果持仓，则判断是否出现卖出信号
+    else:
+        # 当股票收盘价小于15日均价时，出现卖出信号
+        if context.data.close[-1] > context.sma[-1] and context.data.close[0] < context.sma[0]:
+            # 卖出信号出现时，发送卖出指令，系统自动执行卖出交易
+            context.order = context.sell(price=context.data.close[0]*0.9)
+
+```
+
+风控代码:
+```python
+def control_risk(context):
+    """风控"""
+    pass
+
+```
+---
+策略详情 - 双均线策略
+
+基本信息:
+- ID: bXw27Vmpqx3enDo9b0PW5jNBaY1KLGZl
+- 名称: 双均线策略
+- 类型: 策略库策略
+
+策略代码:
+
+选股代码:
+```python
+def choose_stock(context):
+    """标的"""
+    context.symbol_list = ["600158.XSHG"]
+
+```
+
+指标代码:
+```python
+def indicators(context):
+    """指标"""
+    # 计算15日的均价，赋值给变量context.short_sma
+    context.short_sma = SMA(period=15)
+    # 计算30日的均价，赋值给变量context.long_sma
+    context.long_sma = SMA(period=30)
+
+```
+
+择时代码:
+```python
+def timing(context):
+    """择时"""
+    # 判断是否持仓，如果不持仓，则判断是否出现买入信号
+    if not context.position:
+        # 当15日均价上升并且交叉穿过30日均价时，出现买入信号
+        if context.short_sma[-1] < context.long_sma[-1] and context.short_sma[0] > context.long_sma[0]:
+            # 买入信号出现时，发送买入指令，系统自动执行买入交易
+            context.order = context.buy(price=context.data.close[0]*1.1)
+
+    # 如果持仓，则判断是否出现卖出信号
+    else:
+        # 当15日均价下降并且交叉穿过30日均价时，出现卖出信号
+        if context.short_sma[-1] > context.long_sma[-1] and context.short_sma[0] < context.long_sma[0]:
+            # 卖出信号出现时，发送卖出指令，系统自动执行卖出交易
+            context.order = context.sell(price=context.data.close[0]*0.9)
+
+```
+
+风控代码:
+```python
+def control_risk(context):
+    """风控"""
+    pass
+
+```
+---
+策略详情 - 海龟交易策略
+
+基本信息:
+- ID: 1dKPJgRbWyxjO3oJxAGNmLnVpqQ2a5vE
+- 名称: 海龟交易策略
+- 类型: 策略库策略
+
+策略代码:
+
+选股代码:
+```python
+def choose_stock(context):
+    """标的"""
+    context.symbol_list = ["FU2205.XSGE"]
+```
+
+指标代码:
+```python
+def indicators(context):
+    """指标"""
+    # 设置唐奇安通道相关参数
+    # 设置唐奇安通道上轨周期
+    dc_high_period = 20
+    # 设置唐奇安通道下轨周期
+    dc_low_period = 10
+    # 获取唐奇安通道上轨
+    dc_high_line = DonchianChannel(context.data, period=dc_high_period).top(-1)
+    # 获取唐奇安通道下轨
+    dc_low_line = DonchianChannel(context.data, period=dc_low_period).bot(-1)
+
+    # 获取收盘价与唐奇安通道上轨突破信号
+    context.dc_high_signal = CrossOver(context.data.close, dc_high_line)
+    # 获取收盘价与唐奇安通道下轨突破信号
+    context.dc_low_signal = CrossOver(context.data.close, dc_low_line)
+
+    # 设置 ATR 相关参数
+    # 设置平均真实波幅周期
+    atr_period = 20
+    # 获取平均真实波幅 ATR
+    context.atr = AverageTrueRange(context.data, period=atr_period)
+
+    # 设置其他与交易相关的常量
+    # 设置加仓波幅系数
+    context.scale_ratio = 0.5
+    # 设置买入次数上限
+    context.scale_number = 4
+    # 设置止损波幅系数
+    context.stop_ratio = 2
+    # 设置账户风险比例
+    context.account_risk = 0.01
+    # 初始化累计买入次数
+    context.buy_count = 0
+    # 初始化上一次买入价格
+    context.last_buy_price = 0
+```
+
+择时代码:
+```python
+def timing(context):
+    """择时"""
+    # 标的收盘价向上突破唐奇安通道上轨，且当前未持仓时，出现入市信号
+    if context.dc_high_signal[0] == 1.0 and context.buy_count == 0:
+        # 计算买入数量
+        size = context.broker.cash * context.account_risk / context.atr[0] // 10 * 10
+        # 发送买入指令
+        context.buy(data=context.data, size=size, signal='open')
+        # 更新买入次数
+        context.buy_count = 1
+        # 以当前收盘价作为买入价格
+        context.last_buy_price = context.data.close[0]
+```
+
+风控代码:
+```python
+def control_risk(context):
+    """风控"""
+    # 获取多仓数量
+    long_size = context.getposition(context.data, side='long').size
+    # 如果当前未持多仓
+    if long_size == 0:
+        # 跳出该函数
+        return
+
+    # 计算加仓价
+    scale_price = context.last_buy_price + context.scale_ratio * context.atr[0]
+    # 计算止损价
+    stop_price = context.last_buy_price - context.stop_ratio * context.atr[0]
+
+    # 如果标的收盘价向下突破唐奇安通道下轨，或收盘价小于止损价
+    if context.dc_low_signal[0] == -1.0 or context.data.close[0] < stop_price:
+        # 发送平仓指令
+        context.close(data=context.data, side='long')
+        # 更新买入次数
+        context.buy_count = 0
+        
+    # 如果标的收盘价大于加仓价，并且累计加仓次数小于加仓次数上限时
+    elif context.data.close[0] > scale_price and context.buy_count < context.scale_number:
+        # 计算加仓数量
+        size = context.broker.cash * context.account_risk / context.atr[0] // 10 * 10
+        # 发送加仓指令
+        context.buy(data=context.data, size=size, side='long')
+        # 更新累计买入次数
+        context.buy_count += 1
+        # 以当前收盘价作为买入价格
+        context.last_buy_price = context.data.close[0]
+
+```
+---
+策略详情 - 多因子策略
+
+基本信息:
+- ID: Bk4bMeJnL7Em6D0ZR0Y1PdlxaK2jpRNW
+- 名称: 多因子策略
+- 类型: 策略库策略
+
+策略代码:
+
+选股代码:
+```python
+def choose_stock(context):
+    """标的"""
+    # 输入基准标的
+    context.benchmark = "600048.XSHG"
+    # 股票组合的代码赋值给context.symbol_list 
+    context.symbol_list = ["600048.XSHG", "601010.XSHG", "600663.XSHG","600007.XSHG", "600185.XSHG"]
+
+    # 创建一个空列表
+    rate_list = []
+    # 遍历所有股票
+    for data in context.datas:
+        # 获取每只股票的截面收益率，存储到列表rate_list中
+        rate = context.rate[data._name][0]
+        if rate > context.threshold:
+            rate_list.append([data._name, rate])
+
+    # 按照收益率进行降序排序，并获取指定数量的股票池
+    sorted_rate = sorted(rate_list, key=lambda x: x[1], reverse=True)
+    context.stock_pool = [i[0] for i in sorted_rate]
+    context.pool_size = len(context.stock_pool)
+```
+
+指标代码:
+```python
+def indicators(context):
+    """指标"""
+    # 移动平均时间窗口
+    context.period = 15
+    # 设置用于购买股票的资金比例
+    context.max_value_percent = 0.9  
+    # 设置需要考虑收益率的时间窗口
+    context.look_back_days = 50  
+    # 设置截面收益率的阈值
+    context.threshold = 0.2
+
+    # 创建一个空字典
+    context.sma = dict()
+    context.rate = dict()
+    for data in context.datas:
+        # 计算所有股票的15日的移动平均价，存储到字典context.sma中
+        context.sma[data._name] = SMA(data.close, period=context.period)
+        # 计算所有股票的截面收益率，存储到字典context.rate中
+        context.rate[data._name] = PctChange(data.close, period=50)
+```
+
+择时代码:
+```python
+def timing(context):
+    """择时"""
+    # 提取当前的账户价值
+    total_value = context.broker.getvalue()
+
+    if context.pool_size != 0:
+        # 计算用于购买标的池中不同标的的金额
+
+        # 构建一个fibonacci数列
+        def fibonacci(n):
+            if n < 3:
+                return 1
+            return fibonacci(n - 1) + fibonacci(n - 2)
+
+        fibo = []
+        for i in range(context.pool_size + 1):
+            if i > 0:
+                fibo.append(fibonacci(i))
+
+        fibo = sorted(fibo, reverse=True)
+        
+        buy_list = []
+        # 遍历所有标的
+        for data in context.datas:
+            # 获取每只股票的仓位
+            position = context.getposition(data).size
+            # 如果该股票在股票池中，且未持仓，且当前交易日收盘价大于其20日均价,出现买入信号
+            if not position and data._name in context.stock_pool and data.close[0] > context.sma[data._name][0]:
+                # 统计每次符合买入条件的标的
+                buy_list.append(data._name)
+
+                # 计算用于购买该标的的金额
+                rate = fibo[context.stock_pool.index(data._name)] / sum(fibo)
+                per_value = rate * total_value * context.max_value_percent
+
+                # 计算该标的的买入数量
+                size = int(per_value / 100 / data.close[0]) * 100
+                # 发送买入指令
+                context.buy(data=data, size=size,price=data.close[0]*1.1)
+```
+
+风控代码:
+```python
+def control_risk(context):
+    """风控"""
+    # 遍历所有股票
+    for data in context.datas:
+        # 获取每只股票的仓位
+        position = context.getposition(data).size
+        # 如果该股票已持仓，但不在股票池中，或当前交易日收盘价小于其15日均价,出现卖出信号
+        if position != 0 and data._name not in context.stock_pool or context.sma[data._name][0] > data.close[0]:
+            # 平仓
+            context.close(data=data,price=data.close[0]*0.9)
+```
+---
+策略详情 - 移动平均成本法定投策略
+
+基本信息:
+- ID: kLElZMDVnY3JvX87BAmd4yqQW9rxa67g
+- 名称: 移动平均成本法定投策略
+- 类型: 策略库策略
+
+策略代码:
+
+选股代码:
+```python
+def choose_stock(context):
+    """标的"""
+    context.symbol_list = ["513500.XSHG"]
+```
+
+指标代码:
+```python
+def indicators(context):
+    """指标"""
+    # 定投日期, 每月20号定投
+    context.buy_day = 20
+    # 定投金额, 每次定投10000元
+    context.buy_money = 10000  
+    # 偏离上界限
+    context.up_bound = 1.2
+    # 偏离下界限
+    context.down_bound = 0.8
+    # 向上突破上界限时的定投倍数  
+    context.up_multiple = 0.5
+    # 向下突破下界限时的定投倍数  
+    context.down_multiple = 2.5
+```
+
+择时代码:
+```python
+def timing(context):
+    """择时"""
+    # 获取当前交易日的日期
+    current_date = context.data.datetime.date(0)
+    # 获取上一个交易日的日期
+    previous_date = context.data.datetime.date(-1)
+    # 判断当前交易日是否是定投日期
+    if context.buy_day == int(str(current_date)[-2:]) or int(str(previous_date)[-2:]) < context.buy_day < int(str(current_date)[-2:]):
+        # 获取标的的仓位
+        position = context.getposition(context.data).size
+        
+        # 判断是否持仓
+        if position > 0:
+            # 如果持仓，获取平均持有成本
+            per_value = context.getposition(context.data).price
+        else:
+            # 如果未持仓，记标的的收盘价为平均持有成本
+            per_value = context.data.close
+        # 获取定投的费率
+        taker = context.get_taker(context.buy_money)
+        # 基于定投金额和费率计算申购份额
+        size = context.buy_money / (context.data.close * (1 + taker))
+        
+        # 计算当前标的价格与平均持有成本的比值
+        ratio = context.data.close[-1] / per_value
+        
+        # 判断是否偏离下界限
+        if ratio < context.down_bound:
+            # 当当前价格低于平均持有成本时，则多买
+            size = size * context.down_multiple
+            
+        # 判断是否偏离上界限
+        if ratio >= context.up_bound:
+            # 当当前价格高于平均持有成本时，则少买
+            size = size * context.up_multiple
+            
+		# 发送申购指令
+        context.order = context.buy(data=context.data, size=size, price=context.data.close[0]*1.1)
+```
+
+风控代码:
+```python
+def control_risk(context):
+      """风控"""
+      pass
+```
+---
+策略详情 - 均线偏离法定投策略
+
+基本信息:
+- ID: Ew9DBX7a6mNjlr0LP0JGVynbQqOM25dR
+- 名称: 均线偏离法定投策略
+- 类型: 策略库策略
+
+策略代码:
+
+选股代码:
+```python
+def choose_stock(context):
+    """标的"""
+    # 输入基准标的
+    context.benchmark = "000001.XSHG"  
+    # 输入组合标的
+    context.symbol_list = ["000001.XSHG", "510300.XSHG"]
+```
+
+指标代码:
+```python
+def indicators(context):
+    """指标"""
+    # 定投日期
+    context.buy_day = 9
+    # 定投金额
+    context.buy_money = 5000
+    # 指数的均线时间窗口
+    context.period = 100  
+    # 偏离上界限
+    context.up_bound = 1.1
+    # 偏离下界限
+    context.down_bound = 0.9 
+    # 向上突破上界限时的定投倍数 
+    context.up_multiple = 0.5 
+    # 向下突破下界限时的定投倍数 
+    context.down_multiple = 1.5  
+    # 计算指数的均价
+    for data in context.datas:
+        if data._name == context.benchmark:
+            context.sma = MovingAverageSimple(data.close, period=context.period)
+```
+
+择时代码:
+```python
+def timing(context):
+    """择时"""
+    # 获取当前交易日的日期
+    current_date = context.datas[0].datetime.date(0)
+    # 获取上一个交易日的日期
+    previous_date = context.datas[0].datetime.date(-1)
+    # 判断当前交易日是否是定投日期
+    if context.buy_day == int(str(current_date)[-2:]) or int(str(previous_date)[-2:]) < context.buy_day < int(str(current_date)[-2:]):
+        # 遍历所有标的
+        for data in context.datas:
+            # 筛选目标标的
+            if data._name != context.benchmark:
+                # 计算基金净值与指标均价的比值
+                ratio = data.close[-1] / context.sma
+                
+                # 获取定投的费率
+                taker = context.get_taker(context.buy_money)
+                # 基于定投金额和费率计算申购份额
+                size = context.buy_money / (data.close[0] * (1 + taker))
+
+                # 判断是否偏离下界限
+                if ratio < context.down_bound:
+                    # 当当前价格低于平均持有成本时，则多买
+                    size = size * context.down_multiple
+                    
+                # 判断是否偏离上界限
+                if ratio >= context.up_bound:
+                    # 当当前价格高于平均持有成本时，则少买
+                    size = size * context.up_multiple
+
+		        # 发送申购指令
+                context.order = context.buy(data=data, size=size,price=context.data.close[0]*1.1)
+```
+
+风控代码:
+```python
+def control_risk(context):
+    """风控"""
+    pass
+```
+---
+策略详情 - 目标止盈法定投策略
+
+基本信息:
+- ID: 1YzLpkbN5qGKaJ0gNogVQlZew34WRj7v
+- 名称: 目标止盈法定投策略
+- 类型: 策略库策略
+
+策略代码:
+
+选股代码:
+```python
+def choose_stock(context):
+    """标的"""
+    context.symbol_list = ["502048.XSHG"]
+
+```
+
+指标代码:
+```python
+def indicators(context):
+    context.buy_day = 9  # 定投日期
+    context.buy_money = 2000  # 定投金额
+    context.target_profit = 0.4  # 止盈盈利目标
+    context.min_term = 12  # 最小持有期数
+
+    context.term_buy = 0  # 记录投资期数
+    context.finish = False  # 是否达到止盈
+
+```
+
+择时代码:
+```python
+def timing(context):
+    """择时"""
+    current_date = context.datas[0].datetime.date(0)
+    pre_date = context.datas[0].datetime.date(-1)
+
+    # 计算当前收益率，达到止盈条件则全部赎回
+    if context.position:
+        profit_percent = context.datas[0].close[0] / context.position.price - 1
+        if profit_percent >= context.target_profit and context.term_buy >= context.min_term:
+            context.order = context.order_target_value(value=0)
+            context.finish = True
+
+    # 定投
+    if context.buy_day == int(str(current_date)[-2:]) or \
+            int(str(pre_date)[-2:]) < context.buy_day < int(str(current_date)[-2:]):
+
+        if not context.finish:
+            price = context.datas[0].close[0]
+            taker = context.get_taker(context.buy_money)
+            size = context.buy_money / (price * (1 + taker))
+
+            context.order = context.buy(size=size,price=context.data.close[0]*1.1)
+            context.term_buy += 1
+
+```
+
+风控代码:
+```python
+def control_risk(context):
+    """风控"""
+    pass
+
+```
+---
+策略详情 - 目标市值法定投策略
+
+基本信息:
+- ID: jyqPOGLv5z4YN784GAQ6ZlJpnWgKXx9d
+- 名称: 目标市值法定投策略
+- 类型: 策略库策略
+
+策略代码:
+
+选股代码:
+```python
+def choose_stock(context):
+    """标的"""
+    context.symbol_list = ["502048.XSHG"]
+```
+
+指标代码:
+```python
+def indicators(context):
+    """指标"""
+    # 定投日期
+    context.buy_day = 9  
+    # 定投金额
+    context.buy_money = 5000  
+    # 目标市值
+    context.target_value = 50000
+```
+
+择时代码:
+```python
+def timing(context):
+    """择时"""
+    # 获取当前交易日的日期
+    current_date = context.data.datetime.date(0)
+    # 获取上一个交易日的日期
+    previous_date = context.data.datetime.date(-1)
+    # 判断当前交易日是否是定投日期
+    if context.buy_day == int(str(current_date)[-2:]) or int(str(previous_date)[-2:]) < context.buy_day < int(str(current_date)[-2:]):
+
+        # 获取当前市值
+        current_value = context.position.size * context.datas[0].close[0]
+        # 计算买入金额
+        diff_value = context.target_value - current_value
+
+        # 如果买入金额为0，表示当前市值已经等于目标市值，则不定投
+        if diff_value == 0:
+            return
+
+        # 如果买入金额大于0，表示当前市值没有达到目标市值，则追加定投
+        elif diff_value > 0:
+            # 确定买入金额
+            buy_money = min(context.buy_money, diff_value)
+            # 获取定投的费率
+            taker = context.get_taker(buy_money)
+            # 基于定投金额和费率计算申购份额
+            size = buy_money / (context.datas[0].close[0] * (1 + taker))
+		    # 发送申购指令
+            context.order = context.buy(data=context.data, size=size,price=context.data.close[0]*1.1)
+
+        # 如果买入金额小于0，表示当前市值超出目标市值，则卖出超出部分
+        else:
+            context.order = context.order_target_value(target=context.target_value,price=context.data.close[0]*0.9)
+```
+
+风控代码:
+```python
+def control_risk(context):
+    """风控"""
+    pass
+```
+---
+策略详情 - 跨品种套利策略
+
+基本信息:
+- ID: LVpRPwBvOeGZWQ8WO8E34mXMrjxzyn7d
+- 名称: 跨品种套利策略
+- 类型: 策略库策略
+
+策略代码:
+
+选股代码:
+```python
+def choose_stock(context):
+    """标的"""
+    # 设置基准标的
+    context.benchmark = "RB2201.XSGE"
+    # 设置标的
+    context.symbol_list = ["RB2201.XSGE", "J2201.XDCE"]
+```
+
+指标代码:
+```python
+def indicators(context):
+    """指标"""
+    # 设置布林带时间窗口
+    period = 20
+    # 设置开仓阈值
+    open_devfactor = 1.5
+    # 设置止损阈值
+    stop_devfactor = 2
+
+    # 遍历所有标的
+    for data in context.datas:
+        # 如果标的为螺纹钢
+        if data._name == "RB2201.XSGE":
+            # 记录标的对象
+            context.rb_data = data
+        # 如果标的为焦炭
+        elif data._name == "J2201.XDCE":
+            # 记录标的对象
+            context.j_data = data
+
+    # 获取两个标的的价差序列
+    context.diff_close = context.rb_data.close - context.j_data.close
+    # 计算套利区间上下限
+    open_boll_band = BollingerBands(context.diff_close,
+                                            period=period,
+                                            devfactor=open_devfactor)
+
+    # 获取套利区间的上轨、下轨、中轨
+    open_top = open_boll_band.top
+    open_bot = open_boll_band.bot
+    context.open_mid = open_boll_band.mid
+
+    # 获取价差分别突破上轨、下轨的信号
+    context.cross_top_signal = CrossOver(context.diff_close, open_top)
+    context.cross_bot_signal = CrossOver(context.diff_close, open_bot)
+
+    # 计算止损区间上下限
+    stop_boll_band = BollingerBands(context.diff_close,
+                                            period=period,
+                                            devfactor=stop_devfactor)
+    # 获取止损区间的上下轨
+    context.stop_top = stop_boll_band.top
+    context.stop_bot = stop_boll_band.bot
+```
+
+择时代码:
+```python
+def timing(context):
+    """择时"""
+    # 获取焦炭多仓数量
+    long_size = context.getposition(context.j_data, side='long').size
+    # 获取焦炭空仓数量
+    short_size = context.getposition(context.j_data, side='short').size
+
+    # 如果未持有空仓和多仓
+    if long_size == 0 and short_size == 0:
+
+        # 当价差上穿上轨
+        if context.cross_top_signal[0] == 1.0:
+            # 做空螺纹钢
+            context.sell(data=context.rb_data, signal='open')
+            # 做多焦炭
+            context.buy(data=context.j_data, signal='open')
+
+        # 当价差下穿下轨
+        elif context.cross_bot_signal[0] == -1.0:
+            # 做多螺纹钢
+            context.buy(data=context.rb_data, signal='open')
+            # 做空焦炭
+            context.sell(data=context.j_data, signal='open')
+
+    # 如果对焦炭持多仓并且价差小于等于中轨
+    elif long_size > 0 and context.diff_close[0] <= context.open_mid[0]:
+        # 对两个合约进行平仓
+        context.close(data=context.j_data, side='long')
+        context.close(data=context.rb_data, side='short')
+
+    # 如果对焦炭持空仓并且价差大于等于中轨
+    elif short_size < 0 and context.diff_close[0] >= context.open_mid[0]:
+        # 对两个合约进行平仓
+        context.close(data=context.j_data, side='short')
+        context.close(data=context.rb_data, side='long')
+```
+
+风控代码:
+```python
+def control_risk(context):
+    """风控"""
+    # 获取焦炭多仓数量
+    long_size = context.getposition(context.j_data, side='long').size
+    # 获取焦炭空仓数量
+    short_size = context.getposition(context.j_data, side='short').size
+
+    # 如果对焦炭持多仓并且价差大于上轨
+    if long_size > 0 and context.diff_close[0] > context.stop_top[0]:
+        # 对两个合约进行平仓
+        context.close(data=context.j_data, side='long')
+        context.close(data=context.rb_data, side='short')
+
+    # 如果对焦炭持空仓并且价差小于下轨
+    elif short_size < 0 and context.diff_close[0] < context.stop_bot[0]:
+        # 对两个合约进行平仓
+        context.close(data=context.j_data, side='short')
+        context.close(data=context.rb_data, side='long')
+```
+---
+策略详情 - MACD策略
+
+基本信息:
+- ID: RnOL6bxqG5lKpVArZADgJ1MazmXrWB9v
+- 名称: MACD策略
+- 类型: 策略库策略
+
+策略代码:
+
+选股代码:
+```python
+def choose_stock(context):
+    """标的"""
+    context.symbol_list = ["600360.XSHG"]
+
+```
+
+指标代码:
+```python
+def indicators(context):
+    """指标"""
+    # 计算MACD指标
+    # 快速EMA周期 period_me1
+    # 慢速EMA周期 period_me2
+    # DIFF平滑周期 period_signal
+    macd = MACD(period_me1=12, period_me2=26, period_signal=9)
+    # 计算DIF值
+    context.dif = macd.macd
+    # 计算MACD值
+    context.macd = macd.signal
+    # 计算Histo值
+    context.histo = context.dif - context.macd
+
+```
+
+择时代码:
+```python
+def timing(context):
+    """择时"""
+    # 判断是否持仓，如果不持仓，则判断是否出现买入信号
+    if not context.position:
+        # 当DIF和MACD均大于0，并且DIF向上突破MACD时，出现买入信号
+        if context.dif > 0 and context.macd > 0 and context.histo[0] > 0 and context.histo[-1] < 0:
+            # 买入信号出现时，发送买入指令，系统自动执行买入交易
+            context.order = context.buy(price=context.data.close[0]*1.1)
+
+    # 如果持仓，则判断是否出现卖出信号
+    else:
+        # 当DIF和MACD均小于等于0，并且DIF向下突破MACD时，出现卖出信号
+        if context.dif < 0 and context.macd < 0 and context.histo[0] < 0 and context.histo[-1] > 0:
+            # 卖出信号出现时，发送卖出指令，系统自动执行卖出交易
+            context.order = context.sell(price=context.data.close[0]*0.9)
+
+```
+
+风控代码:
+```python
+def control_risk(context):
+    """风控"""
+    pass
+
+```
+---
+策略详情 - MACD+KDJ策略
+
+基本信息:
+- ID: 9mdpEgqwNaBJ25oOMAQe7lR6xbKr3GPV
+- 名称: MACD+KDJ策略
+- 类型: 策略库策略
+
+策略代码:
+
+选股代码:
+```python
+def choose_stock(context):
+    """标的"""
+    context.symbol_list = ["600360.XSHG"]
+
+```
+
+指标代码:
+```python
+def indicators(context):
+    """指标"""
+    
+    # 计算MACD指标
+    # 快速EMA周期 period_me1
+    # 慢速EMA周期 period_me2
+    # DIFF平滑周期 period_signal
+    macd = MACD(period_me1=12, period_me2=26, period_signal=9)
+    # 计算DIF值
+    context.dif = macd.macd
+    # 计算MACD值
+    context.macd = macd.signal
+    # 计算Histo值
+    context.histo = context.dif - context.macd
+
+    # 计算KDJ指标
+    kdj = KDJ(context.data,
+              period=14,
+              period_dfast=3,
+              period_dslow=3,
+              safediv=False,
+              safezero=0.0,
+              movav=SMA)
+
+    context.J = kdj.percJ
+    context.percK = kdj.percK
+    context.D = kdj.percD
+
+
+```
+
+择时代码:
+```python
+def timing(context):
+    """择时"""
+    # 判断是否持仓，如果不持仓，则判断是否出现买入信号
+    if not context.position:
+        # 当DIF和MACD均大于0，并且DIF向上突破MACD时，出现买入信号
+        if context.dif > 0 and context.macd > 0 and context.histo[0] > 0 and context.histo[-1] < 0:
+            # 买入信号出现时，发送买入指令，系统自动执行买入交易
+            context.order = context.buy(price=context.data.close[0]*1.1)
+
+    # 如果持仓，则判断是否出现卖出信号
+    else:
+   	# 当J向下突破D时，出现卖出信号
+    	if context.J[-1] > context.D[-1] and context.J[0] < context.D[0]:
+	    # 卖出信号出现时，发送卖出指令，系统自动执行卖出交易
+            context.order = context.sell(price=context.data.close[0]*0.9)
+
+```
+
+风控代码:
+```python
+def control_risk(context):
+    """风控"""
+    pass
+
+```
+---
+策略详情 - 关卡1-均线突破策略示例
+
+基本信息:
+- ID: 5dZbPzBk7VORjvARLogQ46rKNwaEGMJX
+- 名称: 关卡1-均线突破策略示例
+- 类型: 策略库策略
+
+策略代码:
+
+选股代码:
+```python
+def choose_stock(context):
+    """标的"""
+    # 设置标的为中国石油
+    context.symbol_list = ['601857.XSHG']
+```
+
+指标代码:
+```python
+def indicators(context):
+    """指标"""
+    # 计算15日平均线
+    context.sma = SMA(context.data.close, period=15)
+    # 设置止盈比例为0.1
+    context.p_takeprofit = 0.1
+```
+
+择时代码:
+```python
+def timing(context):
+    """择时"""
+    # 如果未持仓
+    if context.position.size == 0:
+        # 如果当天收盘价在15日均线之上
+        if context.data.close[-1] < context.sma[-1] and context.data.close[0] > context.sma[0]:
+
+            # 执行买入
+            context.buy(data=context.data,price=context.data.close[0]*1.1)
+
+    # 如果当天收盘价在15日均线之下
+    elif context.data.close[-1] > context.sma[-1] and context.data.close[0] < context.sma[0]:
+
+        # 执行平仓
+        context.close(data=context.data,price=context.data.close[0]*0.9)
+```
+
+风控代码:
+```python
+def control_risk(context):
+    """风控"""
+    # 如果持仓
+    if context.position.size != 0:
+        # 计算止盈价
+        limit_price = (1 + context.p_takeprofit) * context.position.price
+
+        # 如果当前收盘价大于止盈价
+        if context.data.close[0] > limit_price:
+            # 执行平仓
+            context.close(data=context.data,price=context.data.close[0]*0.9)
+```
+---
+策略详情 - 关卡2-一阳穿三线示例
+
+基本信息:
+- ID: YWRakGqPDlvKjx0D1A9LN41QyVwOp6r7
+- 名称: 关卡2-一阳穿三线示例
+- 类型: 策略库策略
+
+策略代码:
+
+选股代码:
+```python
+def choose_stock(context):
+    """标的"""
+    # 设置标的及基准
+    context.benchmark = "000300.XSHG"
+    context.symbol_list = ["000300.XSHG"]
+    context.parse_index = True
+
+    # 确定标的池
+    context.buy_list = []
+    for data in context.datas:
+        short_sma = context.stock_sma[data._name]['short_sma']
+        medium_sma = context.stock_sma[data._name]['medium_sma']
+        long_sma = context.stock_sma[data._name]['long_sma']
+        volume_sma = context.stock_sma[data._name]['volume_sma']
+
+        # 判断是否符合一阳穿三线条件
+        if data.open[0] < data.close[0] and \
+                data.volume[0] > 2 * volume_sma[-1] and \
+                data.low[0] < short_sma[0] and \
+                data.low[0] < medium_sma[0] and \
+                data.low[0] < long_sma[0] and \
+                data.close[0] > short_sma[0] and \
+                data.close[0] > medium_sma[0] and \
+                data.close[0] > long_sma[0]:
+            context.buy_list.append(data._name)
+```
+
+指标代码:
+```python
+def indicators(context):
+    """指标"""
+    # 设置短期均线周期为 5 日
+    context.short_period = 5
+    # 设置中期均线周期为 10 日
+    context.medium_period = 10
+    # 设置长期均线周期为 30 日
+    context.long_period = 30
+    # 设置放量周期为 15 日
+    context.volume_period = 15
+    # 设定止盈、止损涨跌幅为 5%
+    context.down_tr = 0.05
+
+    # 创建空字典
+    context.stock_sma = {}
+
+    for data in context.datas:
+        context.stock_sma[data._name] = {
+            'short_sma': SMA(data.close, period=context.short_period), # 计算短期均价
+            'medium_sma' : SMA(data.close, period=context.medium_period), # 计算中期均价
+            'long_sma' : SMA(data.close, period=context.long_period), # 计算长期均价
+            'volume_sma' : SMA(data.volume, period=context.volume_period) # 计算成交量均值
+        }
+
+```
+
+择时代码:
+```python
+def timing(context):
+    """择时"""
+    # 立即买入
+    for name in context.buy_list:
+        data = context.getdatabyname(name)
+        context.buy(data=data,price=data.close[0]*1.1)
+            
+```
+
+风控代码:
+```python
+def control_risk(context):
+    """风控"""
+    # 当持有股涨跌幅大于 5%，就全部卖出
+    for data in context.datas:
+        position = context.getposition(data).size
+        if position!= 0 and abs((data.close[0] - data.close[-1])/data.close[-1]) >= context.down_tr:
+            context.close(data=data,price=data.close[0]*0.9)
+```
+---
+策略详情 - 关卡3-指标选取示例
+
+基本信息:
+- ID: E6yMYPqWlQDNB4oNxAwb1e3ZLm7VrxkJ
+- 名称: 关卡3-指标选取示例
+- 类型: 策略库策略
+
+策略代码:
+
+选股代码:
+```python
+def choose_stock(context):
+    """标的"""
+    # 设置基准标的：上证50
+    context.benchmark = '000300.XSHG'
+    # 设置组合标的，上证50里面的所有成分股
+    context.symbol_list = ["000300.XSHG"]
+    # 设置解析成分股
+    context.parse_index = True
+
+    # 创建列表，用来储存合格标的
+    context.stock_list = []
+
+    # 遍历初始标的池中的所有标的
+    for data in context.datas:
+        
+        # 如果当前标的历史交易天数小于计算周期
+        if len(data.volume) < context.volume_days:
+            # 跳过本次循环
+            continue
+
+        # 创建成交量累加变量
+        count_volume = 0            
+        # 计算总成交量，将指定时间内的每日成交量累加求和
+        for i in range(context.volume_days):
+            count_volume += data.volume[-i]
+        # 计算历史成交量均值
+        volume_avg = count_volume/context.volume_days
+        
+        # 计算当日涨幅
+        daily_increase = (data.close[0]-data.close[-1])/data.close[-1]
+
+        # 判断当日涨幅是否超过目标当日涨幅，并且当日成交量超过历史成交量均值
+        if daily_increase > context.target_increase and data.volume[0]>volume_avg:
+            # 将通过判断的标的添加到合格标的池
+            context.stock_list.append(data._name)
+```
+
+指标代码:
+```python
+def indicators(context):
+    """指标"""
+    # 设置历史成交量均值的计算周期
+    context.volume_days = 120
+    # 设置目标当日涨幅
+    context.target_increase = 0.02
+    # 设置止损比例
+    context.loss_ratio = 0.05
+
+    # 创建MACD指标字典
+    context.stock_info = {}
+
+    # 遍历所有标的
+    for data in context.datas:
+
+        # MACD类的实例化，快的EMA周期为12，慢的EMA周期为26，差离值计算周期为9
+        macd_instance = MACD(data.close, period_me1=12, period_me2=26, period_signal=9)
+
+        # 将对应的值写入到MACD指标字典中
+        context.stock_info[data._name] = {
+            'DIF值': macd_instance.macd,
+            'DEA值': macd_instance.signal,
+            'MACD值':macd_instance.macd-macd_instance.signal,
+        }
+
+```
+
+择时代码:
+```python
+def timing(context):
+    """择时"""
+    # 遍历初始标的池中的所有标的
+    for data in context.datas:
+
+        # 获取MACD指标数据和持仓信息
+        macd_info = context.stock_info[data._name]
+        position = context.getposition(data)
+
+        # 如果标的在合格标的池中且当前未持仓
+        if data._name in context.stock_list and position.size == 0:
+
+            # 如果DIF值和DEA值均大于0，并且MACD值由负变正
+            if macd_info['DIF值'][0] > 0 and macd_info['DEA值'][0] > 0 and macd_info['MACD值'][-1] < 0 and macd_info['MACD值'][0] > 0:
+                # 发送买入指令，系统自动执行买入交易
+                context.buy(data=data,price=data.close[0]*1.1)
+
+        # 如果当前已持仓        
+        elif position.size != 0:
+            # 如果DIF值和DEA值均小于0，并且MACD值由正变负
+            if macd_info['DIF值'][0] < 0 and macd_info['DEA值'][0] < 0 and macd_info['MACD值'][-1] > 0 and macd_info['MACD值'][0] < 0 :
+                # 执行平仓
+                context.close(data=data,price=data.close[0]*0.9)
+```
+
+风控代码:
+```python
+def control_risk(context):
+    """风控"""
+    # 遍历初始标的中的所有标的
+    for data in context.datas:
+        # 获取标的持仓信息
+        position = context.getposition(data)
+
+        # 如果当前已持仓
+        if position.size != 0:
+            # 计算止损价格
+            stop_price = (1 - context.loss_ratio) * position.price
+
+            # 如果当日收盘价低于止损价格
+            if data.close[0] < stop_price:
+                # 执行平仓
+                context.close(data=data,price=data.close[0]*0.9)   
+```
+---
+策略详情 - 关卡4-筛选总市值选股示例
+
+基本信息:
+- ID: lbgKWjdQGe4vXV8X60YLD9pR6m1ON5yk
+- 名称: 关卡4-筛选总市值选股示例
+- 类型: 策略库策略
+
+策略代码:
+
+选股代码:
+```python
+def choose_stock(context):
+    """标的"""
+    # 输入基准标的
+    context.benchmark = "000016.XSHG"
+    # 输入组合标的
+    context.symbol_list = ['000016.XSHG']
+    context.parse_index = True
+    
+    # 获取当前以及前一天的日期
+    context.current_date = context.data.datetime.date()
+    context.previous_date = context.data.datetime.date(-1)
+    # 判断当前交易日是否是每个季度的第一个交易日，判断标的池的更新次数，若满足其中一个条件，更新标的池
+    if context.current_date.month in [1, 4, 7, 10] and context.previous_date.month not in [1, 4, 7, 10]:
+        # 获取估值指标数据
+        indicator_data = context.get_fundamentals(context.current_date, type="valuation")
+        # 筛选出总市值大于最小总市值的数据
+        filted_data = indicator_data[indicator_data['market_cap'] > context.min_market_cap]
+        
+        # 查看筛选后的标的代码
+        context.log('筛选后的标的为：\n{}'.format(filted_data['symbol_exchange']))
+```
+
+指标代码:
+```python
+def indicators(context):
+    """指标初始化"""
+    # 设置最小总市值
+    context.min_market_cap = 15000
+```
+
+择时代码:
+```python
+def timing(context):
+    """择时"""
+    pass
+```
+
+风控代码:
+```python
+def control_risk(context):
+    """风控"""
+    pass
+```
+---
+策略详情 - 关卡5-筛选中长期上涨股票示例
+
+基本信息:
+- ID: JNMK5br6azDm97AjBAgwE4X13nGZVOyq
+- 名称: 关卡5-筛选中长期上涨股票示例
+- 类型: 策略库策略
+
+策略代码:
+
+选股代码:
+```python
+def choose_stock(context):
+    """标的"""
+    # 设置基准标的
+    context.benchmark = "000016.XSHG"
+    # 设置标的池
+    context.symbol_list = ["000016.XSHG"]
+    # 设置解析成分股
+    context.parse_index = True
+
+    # 获取当前的日期
+    context.current_date = context.data.datetime.date()    
+    # 获取昨天的日期
+    context.previous_date = context.data.datetime.date(-1)
+
+
+    # 如果当前交易日为每个季度的第一个交易日
+    if context.current_date.month in [1, 4, 7, 10] and context.previous_date.month not in [1, 4, 7, 10]:
+        # 保存上一次筛选后的标的名称列表
+        context.last_stock_pool = context.stock_pool
+
+        # 获取财务指标数据
+        indicator_data = context.get_fundamentals(pub_date=context.current_date, type='indicator')
+
+        # 筛选出营业收入同比增长率大于最小营业收入同比增长率的数据
+        filted_data = indicator_data[indicator_data['inc_revenue_year_on_year']>context.min_income_raise]
+        # 进一步筛选出净利润同比增长率大于最小净利润同比增长率的数据
+        filted_data = filted_data[filted_data['inc_net_profit_year_on_year']>context.min_margin]
+        # 进一步筛选出销售净利率大于最小销售净利率的数据
+        filted_data = filted_data[filted_data['net_profit_margin']>context.min_sales_margin]
+        # 进一步筛选出销售毛利率大于最小销售毛利率的数据
+        filted_data = filted_data[filted_data['gross_profit_margin']>context.min_gross_margin]
+        # 进一步筛选出净资产收益率大于最小净资产收益率的数据
+        filted_data = filted_data[filted_data['roe']>context.min_roe]
+
+        # 查看筛选后的标的代码
+        context.log('筛选后的标的为：\n{}'.format(filted_data['symbol_exchange']))
+        # 将标的代码保存到标的池中
+        context.stock_pool = filted_data['symbol_exchange'].to_list()
+```
+
+指标代码:
+```python
+def indicators(context):
+    """指标"""
+    # 设置最小营业收入同比增长率
+    context.min_income_raise = 10
+    # 设置最小净利润同比增长率
+    context.min_margin = 22
+    # 设置最小销售净利率
+    context.min_sales_margin = 2
+    # 设置最小销售毛利率
+    context.min_gross_margin = 9
+    # 设置最小净资产收益率
+    context.min_roe = 5
+    # 设置账户最大使用资金
+    context.max_percent = 0.9
+
+    # 初始化上一次标的名称列表
+    context.last_stock_pool = []
+    # 初始化当前标的名称列表
+    context.stock_pool = []
+ 
+```
+
+择时代码:
+```python
+def timing(context):
+    """择时"""
+    # 如果当前交易日为每个季度的第一个交易日
+    if context.current_date.month in [1, 4, 7, 10] and context.previous_date.month not in [1, 4, 7, 10]: 
+        
+        # 创建买入列表
+        buy_list = []
+        # 遍历上一次标的池数据
+        for name in context.last_stock_pool:
+            # 根据标的名称，获取标的数据
+            data = context.getdatabyname(name)
+
+            # 遍历当前标的池中的标的名称
+            if name in context.stock_pool:
+                
+                # 计算单个标的能使用的资金
+                stock_value = context.broker.getvalue() * context.max_percent/len(context.stock_pool)
+                # 计算单个标的所需购买的数量
+                size = stock_value / data.close[0] // 100*100
+                # 获取标的成交数据
+                position = context.getposition(data)
+
+                # 如果需购买的数量小于当前持仓数量
+                if size < position.size:
+                    # 执行卖出，减少持仓数量
+                    context.sell(data=data, size=position.size - size,price=data.close[0]*0.9)
+                # 如果需购买的数量大于当前持仓数量
+                elif size > position.size:
+                    # 将标的和购买数量添加到购买列表中
+                    buy_list.append((data, size - position.size))
+
+            # 其他情况
+            else:
+                # 执行平仓
+                context.close(data=data,price=data.close[0]*0.9)
+   
+        # 遍历买入列表
+        for data, size in buy_list:
+            # 执行买入
+            context.buy(data=data, size=size,price=data.close[0]*1.1)
+
+    # 遍历当前标的池
+    for name in context.stock_pool:
+        # 根据标的名称，获取标的数据
+        data = context.getdatabyname(name)
+
+        # 如果该标的当前没有持仓
+        if not context.getposition(data):
+            # 计算单个标的能使用的资金
+            stock_value = context.broker.getvalue() * context.max_percent/len(context.stock_pool)
+            # 计算购买数量
+            size = stock_value / data.close[0] // 100*100
+            # 执行购买
+            context.buy(data=data, size=size,price=data.close[0]*1.1)
+```
+
+风控代码:
+```python
+def control_risk(context):
+    """风控"""
+    pass
+```
+---
+策略详情 - 关卡6-CCI指标择时示例
+
+基本信息:
+- ID: payN3jJvkP5z7q8BkoZGE9rdYO6BmVbR
+- 名称: 关卡6-CCI指标择时示例
+- 类型: 策略库策略
+
+策略代码:
+
+选股代码:
+```python
+def choose_stock(context):
+    """标的"""
+    # 设置标的为康泰生物
+    context.symbol_list = ["300601.XSHE"]
+```
+
+指标代码:
+```python
+def indicators(context):
+    """指标"""
+    # 计算周期为20日的CCI指标
+    context.cci = CommodityChannelIndex(period=20)
+
+    # 设置最小CCI值
+    context.min_cci = -100
+    # 设置最大CCI值
+    context.max_cci = 100
+    # 设置账户最大使用资金
+    context.max_percent = 0.9
+```
+
+择时代码:
+```python
+def timing(context):
+    """择时"""
+    # 如果未持有该标的
+    if context.position.size == 0:
+        # 如果 CCI 值向上突破最小 CCI 值
+        if context.cci[-1] < context.min_cci and context.cci[0] > context.min_cci:
+            # 计算购买数量
+            size = context.broker.cash*context.max_percent/context.data.close[0]//100*100
+            # 执行买入
+            context.buy(data=context.data, size=size,price=context.data.close[0]*1.1)
+    
+    # 如果 CCI 值向下突破最大 CCI 值
+    elif context.cci[-1] > context.max_cci and context.cci[0] < context.max_cci:
+            # 执行平仓
+            context.close(data=context.data,price=context.data.close[0]*0.9)
+```
+
+风控代码:
+```python
+def control_risk(context):
+    """风控"""
+    pass
+```
+---
+策略详情 - 关卡6-布林带择时示例
+
+基本信息:
+- ID: RYKkG1ebvWDV9q8518y42gBMJxzawpP3
+- 名称: 关卡6-布林带择时示例
+- 类型: 策略库策略
+
+策略代码:
+
+选股代码:
+```python
+def choose_stock(context):
+    """标的"""
+    # 设置标的为中体产业
+    context.symbol_list = ["600158.XSHG"]
+```
+
+指标代码:
+```python
+def indicators(context):
+    """指标"""
+    # 计算布林带指标，周期为20天
+    bb = BollingerBands(context.data.close, period=20)
+    # 计算阻力线
+    context.top = bb.top
+    # 计算支撑线
+    context.bot = bb.bot
+    # 设置账户最大使用资金
+    context.max_percent = 0.9
+```
+
+择时代码:
+```python
+def timing(context):
+    """择时"""
+    # 如果未持有该标的
+    if context.position.size == 0:
+        # 如果价格触及下限支撑线
+        if context.data.close[0] <= context.bot[0]:
+            # 计算购买数量
+            size = context.broker.cash*context.max_percent/context.data.close[0]//100*100
+            # 执行买入
+            context.buy(data=context.data, size=size,price=context.data.close[0]*1.1)
+    
+    # 如果价格触及上限阻力线
+    elif context.data.close[0] >= context.top[0]:
+            # 执行平仓
+            context.close(data=context.data,price=context.data.close[0]*0.9)
+```
+
+风控代码:
+```python
+def control_risk(context):
+    """风控"""
+    pass
+
+```
+---
+策略详情 - 关卡5-CCI+SMA择时示例
+
+基本信息:
+- ID: jLMGWdzRy51DgPA3wAb4xENYa37Opmek
+- 名称: 关卡5-CCI+SMA择时示例
+- 类型: 策略库策略
+
+策略代码:
+
+选股代码:
+```python
+def choose_stock(context):
+    # 设置标的为康泰生物
+    context.symbol_list = ["300601.XSHE"]
+```
+
+指标代码:
+```python
+def indicators(context):
+    """指标"""
+    # 计算120日均线
+    context.sma = SMA(context.data.close, period=120)
+    # 计算周期为40日的CCI指标
+    context.cci = CommodityChannelIndex(period=40)
+    # 设置最小CCI值
+    context.min_cci = -100
+
+```
+
+择时代码:
+```python
+def timing(context):
+    """择时"""
+    # 如果未持有该标的
+    if context.position.size == 0:
+        # 如果 CCI 值向上突破最小 CCI 值
+        if context.cci[-1] < context.min_cci and context.cci[0] > context.min_cci:
+            # 计算购买数量
+            size = context.broker.cash/context.data.close[0]//100*100
+            # 执行买入
+            context.buy(data=context.data, size=size,price=context.data.close[0]*1.1)
+
+    # 如果股价向下突破 120 日均线
+    elif context.data.close[-1] > context.sma[-1] and context.data.close[0] < context.sma[0]:
+        # 执行平仓
+        context.close(data=context.data,price=context.data.close[0]*0.9)
+
+```
+
+风控代码:
+```python
+def control_risk(context):
+    pass
+
+```
+---
+策略详情 - 关卡7-抄底止损示例
+
+基本信息:
+- ID: MbKgYj19d2eNynok9ADJVLvrXGEZ6OkP
+- 名称: 关卡7-抄底止损示例
+- 类型: 策略库策略
+
+策略代码:
+
+选股代码:
+```python
+def choose_stock(context):
+    """标的"""
+    # 设置标的
+    context.symbol_list = ["300761.XSHE"]
+
+```
+
+指标代码:
+```python
+def indicators(context):
+    """指标"""
+    # 设置止损比例
+    context.p_stoploss = 0.05
+    # 设置连续下跌天数
+    context.p_downdays = 4
+    # 设置连续上涨天数
+    context.p_updays = 3
+    # 设置账户最大使用资金
+    context.max_percent = 0.9
+```
+
+择时代码:
+```python
+def timing(context):
+    """择时"""
+    # 定义价格趋势判断函数
+    def price_trend(times, trend_type):
+        # 如果当前次数小于0，或趋势类型不为up或down，则返回True
+        if times < 0 or trend_type not in ['up', 'down']:
+            return False
+        # 如果当前次数为0，则返回True
+        elif times == 0:
+            return True
+        # 如果趋势类型为down，且出现前一天小于等于当天，则返回False
+        elif trend_type == 'down' and context.data[-times] <= context.data[1-times]:
+            return False
+        # 如果趋势类型为up，且出现前一天大于等于当天，则返回False
+        elif trend_type == 'up' and context.data[-times] >= context.data[1-times]:
+            return False
+        # 其他情况则调用函数本身，并次数减一
+        else:
+            return price_trend(times-1, trend_type)
+    
+    # 判断是否持仓，如果没有持仓，则开仓
+    if context.position.size == 0:
+        # 判断是否在指定天数连续下跌
+        if price_trend(context.p_downdays, 'down'):
+            # 计算购买数量
+            size = context.broker.cash * context.max_percent / context.data.close[0] // 100 * 100
+            # 执行买入
+            context.buy(data=context.data, size=size,price=context.data.close[0]*1.1)
+    
+    # 判断是否在指定天数连续上涨
+    elif price_trend(context.p_updays, 'up'):
+            # 执行平仓
+            context.close(data=context.data,price=context.data.close[0]*0.9)
+```
+
+风控代码:
+```python
+def control_risk(context):
+    """风控"""
+
+    # 判断是否持仓
+    if context.position.size != 0:
+        # 计算止损价
+        stop_price = (1 - context.p_stoploss) * context.position.price
+
+        # 如果价格下跌到了止损价，则进行平仓
+        if context.data.close[0] <= stop_price :
+            context.close(data=context.data)
+```
+---
+策略详情 - 关卡7-抄底止盈止损示例
+
+基本信息:
+- ID: Nnb52gZJDPReBw8qg0akKVLyp9Ymj34E
+- 名称: 关卡7-抄底止盈止损示例
+- 类型: 策略库策略
+
+策略代码:
+
+选股代码:
+```python
+def choose_stock(context):
+    """标的"""
+    # 设置标的为浦发银行
+    context.symbol_list = ["600000.XSHG"]
+```
+
+指标代码:
+```python
+def indicators(context):
+    """指标"""
+    # 设置连续下跌天数
+    context.p_downdays = 3
+    # 设置止损比例
+    context.p_stoploss = 0.05
+    # 设置止盈比例
+    context.p_takeprofit = 0.15
+    # 设置账户最大使用资金
+    context.max_percent = 0.9
+```
+
+择时代码:
+```python
+def timing(context):
+    """择时"""
+    # 定义连续下跌判断函数
+    def slumped(times):
+        # 如果次数为0，则返回True
+        if times == 0:
+            return True
+        # 如果出现前一天收盘价小于等于当天
+        elif context.data.close[-times] <= context.data.close[1-times] or times < 0:
+            return False
+        # 其他情况则调用函数本身，并次数减一
+        else:
+            return slumped(times-1)
+
+    # 如果未持仓，且在指定天数连续下跌
+    if context.position.size == 0 and slumped(context.p_downdays):
+        # 计算买入数量
+        size = context.broker.cash * context.max_percent / context.data.close[0] // 100 * 100
+        # 执行买入
+        context.buy(data=context.data, size=size,price=context.data.close[0]*1.1)
+```
+
+风控代码:
+```python
+def control_risk(context):
+    """风控"""
+    # 如果持仓
+    if context.position.size != 0:
+        # 计算止损价
+        stop_price = (1 - context.p_stoploss) * context.position.price
+        # 计算止盈价
+        limit_price = (1 + context.p_takeprofit) * context.position.price
+ 
+        # 如果当前收盘价大于止盈价或当前收盘价小于止损价
+        if context.data.close[0] > limit_price or context.data.close[0] < stop_price:
+            # 执行平仓
+            context.close(data=context.data,price=context.data.close[0]*0.9)
+```
+---
+策略详情 - 关卡8-跟踪止损示例
+
+基本信息:
+- ID: Xw2Mn7YDaBVgPb0b9o6dWOlrmjERQLeG
+- 名称: 关卡8-跟踪止损示例
+- 类型: 策略库策略
+
+策略代码:
+
+选股代码:
+```python
+def choose_stock(context):
+    """标的"""
+    #  设置标的为北信源
+    context.symbol_list = ["300352.XSHE"]
+```
+
+指标代码:
+```python
+def indicators(context):
+    """指标"""
+    # 计算5日的均价，赋值给变量context.short_sma
+    context.short_sma = SMA(context.data.close, period=5)
+    # 计算30日的均价，赋值给变量context.long_sma
+    context.long_sma = SMA(context.data.close, period=30)
+
+    # 设置止损比例
+    context.stop_rate = 0.05
+    # 设置最高价为0
+    context.h_price = 0
+    # 设置账户最大使用资金
+    context.max_percent = 0.9
+```
+
+择时代码:
+```python
+def timing(context):
+    """择时"""
+    # 设置死叉信号为False
+    context.d_cross_sign = False
+
+    # 如果未持仓
+    if context.position.size == 0:
+        # 当5日均价上升并且交叉穿过30日均价时，出现买入信号
+        if context.short_sma[-1] < context.long_sma[-1] and context.short_sma[0] > context.long_sma[0]:
+            # 计算买入数量
+            size = context.broker.cash * context.max_percent / context.data.close[0] // 100 * 100
+            # 执行买入
+            context.buy(data=context.data, size=size,price=context.data.close[0]*1.1)
+
+    # 如果5日均价下跌并且穿过30日均价时
+    elif context.short_sma[-1] > context.long_sma[-1] and context.short_sma[0] < context.long_sma[0]:
+
+        # 执行平仓
+        context.close(data=context.data,price=context.data.close[0]*0.9)
+        # 重置最高价
+        context.h_price = 0
+        # 将死叉信号设置为True
+        context.d_cross_sign = True
+```
+
+风控代码:
+```python
+def control_risk(context):
+    """风控"""
+    # 如果当前已持仓并且未出现死叉
+    if context.position.size != 0 and not context.d_cross_sign:
+        # 获取最高价
+        context.h_price = max(
+            context.h_price, context.position.price, context.data.close[0])
+
+        # 计算止损价
+        stop_price = (1 - context.stop_rate) * context.h_price
+
+        # 如果当前股价小于止损价
+        if context.data.close[0] < stop_price:
+            # 执行平仓
+            context.close(data=context.data,price=context.data.close[0]*1.1)
+            # 重置最高价
+            context.h_price = 0
+```
+---
+策略详情 - 布林带策略
+
+基本信息:
+- ID: nla9wGYjv71mkO0ENAbzBPM4rRNWQdqJ
+- 名称: 布林带策略
+- 类型: 策略库策略
+
+策略代码:
+
+选股代码:
+```python
+def choose_stock(context):
+    """标的"""
+    context.symbol_list = ["600000.XSHG"]
+```
+
+指标代码:
+```python
+def indicators(context):
+    """指标"""
+    # 计算布林带指标，period周期修改为60
+    bb = BollingerBands(context.data.close, period = 60)
+    # 计算阻力线
+    context.top = bb.top
+    # 计算支撑线
+    context.bot = bb.bot
+```
+
+择时代码:
+```python
+def timing(context):
+    """择时"""
+    # 判断是否持仓，如果不持仓，则判断是否出现买入信号
+    if not context.position:
+        # 当股价触及下限支撑线时，出现买入信号
+        if context.data.close[0] <= context.bot[0]:
+            # 买入信号出现时，发送买入指令，系统自动执行买入交易
+            context.order = context.buy(price=context.data.close[0]*1.1)
+
+    # 如果持仓，则判断是否出现卖出信号
+    else:
+        # 当股价触及上限阻力线时，出现卖出信号
+        if context.data.close[0] >= context.top[0]:
+        # 卖出信号出现时，发送卖出指令，系统自动执行卖出交易
+            context.order = context.sell(price=context.data.close[0]*1.1)
+```
+
+风控代码:
+```python
+def control_risk(context):
+    """风控"""
+    pass
+```
+---
+策略详情 - Hilbert策略
+
+基本信息:
+- ID: aKWZlLvVjnk4BQ8zmAPqzDNMmX9xd5p6
+- 名称: Hilbert策略
+- 类型: 策略库策略
+
+策略代码:
+
+选股代码:
+```python
+def choose_stock(context):
+    """标的"""
+    context.symbol_list = ["601398.XSHG"]
+```
+
+指标代码:
+```python
+def indicators(context):
+    """指标"""
+    # 设置均价周期
+    context.sma_period = 20
+    # 设置 Hilbert 变换的周期
+    context.hilbert_period = 30
+
+    # 计算均价
+    context.sma = SMA(context.data.close, period=context.sma_period)
+    # 计算均价的差分
+    context.sma_diff = context.sma(0) - context.sma(-1)
+```
+
+择时代码:
+```python
+def timing(context):
+    """择时"""
+    import numpy as np
+    from scipy.signal import hilbert
+
+    # 获取差分序列
+    context.history_data = context.sma_diff.get(ago=0, size=context.hilbert_period)
+
+    # 判断差分序列是否为空
+    if context.history_data:
+        # 基于差分序列进行Hilbert变换
+        context.hilbert = np.imag(hilbert(list(context.history_data)))
+
+        # 判断是否持仓，如果不持仓，则判断是否出现买入信号
+        if not context.position:
+            # △(n)大于0，出现买入信号
+            if context.hilbert[-1] > 0:
+                # 发送买入指令
+                context.order = context.buy()
+            
+        # 如果持仓，则判断是否出现卖出信号
+        else:
+            # △(n)小于0，出现卖出信号
+            if context.hilbert[-1] < 0:
+                # 发送卖出指令
+                context.order = context.sell()
+```
+
+风控代码:
+```python
+def control_risk(context):
+    """风控"""
+    pass
+```
+---
+策略详情 - 激进型FOF
+
+基本信息:
+- ID: 6RzYKdQ791Gyrj0GY8pgkaJWN2mw5vBn
+- 名称: 激进型FOF
+- 类型: 策略库策略
+
+策略代码:
+
+选股代码:
+```python
+def choose_stock(context):
+    """标的"""
+    # 输入基准标的
+    context.benchmark = "000300.XSHG"
+    # 输入组合标的
+    context.symbol_list = ["160632.XSHE", "161029.XSHE", "161121.XSHE", "161725.XSHE", "159916.XSHE", "159933.XSHE", "160222.XSHE", "160421.XSHE", "165516.XSHE", "161115.XSHE"]
+    # 获取当前的日期
+    context.current_date = context.data.datetime.date()    
+    # 获取昨天的日期
+    context.previous_date = context.data.datetime.date(-1)
+
+    # 如果当天月份与昨天月份不同
+    if context.current_date.month != context.previous_date.month:
+        # 记录上一次筛选的标的
+        context.last_stock_pool = context.stock_pool
+
+        # 设置标的得分空列表
+        score_list = []
+        # 遍历所有标的
+        for data in context.datas:
+            # 计算得分
+            score = context.returns[data._name][0] + context.sharpe_ratio[data._name][0] - context.max_draw_down[data._name][0]
+            # 添加标的代码和得分到标的得分列表
+            score_list.append([data._name, score])
+        # 按照得分降序排列
+        sorted_rate = sorted(score_list, key=lambda x: x[1], reverse=True)
+
+        # 计算筛选标的数量
+        context.stock_num = int(context.ratio * len(context.symbol_list))
+        # 重置标的池空列表
+        context.stock_pool = []
+        # 获取指定数量的标的
+        for i in sorted_rate[:context.stock_num]:
+            # 将筛选的标的添加到标的池
+            context.stock_pool.append(i[0])
+```
+
+指标代码:
+```python
+def indicators(context):
+    """指标"""
+    # 设置需要考虑最近 N 个交易日标的表现
+    period = 5
+    # 设置筛选标的的比例
+    context.ratio = 0.2
+    # 设置用于购买股票的资金比例
+    context.max_percent = 0.9
+
+    # 初始化历史 N 个交易日净值增长率
+    context.returns = {}
+    # 初始化历史 N 个交易日的波动率
+    context.volatility = {}
+    # 初始化夏普比率
+    context.sharpe_ratio = {}
+    # 初始化历史 N 个交易日的最大回撤
+    context.max_draw_down = {}
+
+    # 设置本次标的名称列表
+    context.stock_pool = []
+
+    # 遍历所有标的
+    for data in context.datas:
+        # 计算最近 N 个交易日的总收益率
+        context.returns[data._name] = ROC(data, period=period)
+
+        # 计算最近 N 个交易日的波动率
+        growth_rate = ROC(data, period=1)
+        context.volatility[data._name] = StdDev(growth_rate, period=period)
+
+        # 计算最近 N 个交易日的夏普比率
+        context.sharpe_ratio[data._name] = SharpeRatio(data, period=period)
+
+        # 计算最近 N 个交易日的最大回撤率
+        context.max_draw_down[data._name] = MaxDrawDownN(data, period=period)
+```
+
+择时代码:
+```python
+def timing(context):
+    """择时"""
+    # 如果当天月份与昨天月份不同
+    if context.current_date.month != context.previous_date.month:
+        
+        # 遍历上一次标的池数据
+        for name in context.last_stock_pool:
+            # 根据标的名称，获取标的数据
+            data = context.getdatabyname(name)
+
+            # 如果标的名称在不在本次标的池中
+            if name not in context.stock_pool:
+                # 对标的进行平仓
+                context.close(data=data)
+
+        # 遍历当前标的池
+        for name in context.stock_pool:
+            # 根据标的名称，获取标的数据
+            data = context.getdatabyname(name)
+
+            # 如果该标的当前没有持仓
+            if context.getposition(data).size == 0:
+                # 计算单个标的能使用的资金
+                stock_value = context.broker.getvalue() * context.max_percent / context.stock_num
+                # 计算购买数量
+                size = stock_value / data.close[0] // 100 * 100
+                # 执行购买
+                context.buy(data=data, size=size)
+```
+
+风控代码:
+```python
+def control_risk(context):
+    """风控"""
+    pass
+```
+---
+策略详情 - 成长型FOF
+
+基本信息:
+- ID: 95YNkRq7wLlebgoMp8vG42djMKyVQ3DP
+- 名称: 成长型FOF
+- 类型: 策略库策略
+
+策略代码:
+
+选股代码:
+```python
+def choose_stock(context):
+    """标的"""
+    # 输入基准标的
+    context.benchmark = "000300.XSHG"
+    # 输入组合标的
+    context.symbol_list = ["160632.XSHE", "161029.XSHE", "161121.XSHE", "161725.XSHE", "159916.XSHE", "160421.XSHE", "165516.XSHE", "161115.XSHE", "164208.XSHE", "160513.XSHE"]
+    
+    # 获取当前的日期
+    context.current_date = context.data.datetime.date()    
+    # 获取昨天的日期
+    context.previous_date = context.data.datetime.date(-1)
+
+    # 如果当天月份与昨天月份不同
+    if context.current_date.month != context.previous_date.month:
+        # 记录上一次筛选的标的
+        context.last_stock_pool = context.stock_pool
+
+        # 设置标的得分空列表
+        score_list = []
+        # 遍历所有标的
+        for data in context.datas:
+            # 计算得分
+            score = context.returns[data._name][0] - context.max_draw_down[data._name][0] + context.volatility[data._name][0] 
+            # 添加标的代码和得分到标的得分列表
+            score_list.append([data._name, score])
+        # 按照得分降序排列
+        sorted_rate = sorted(score_list, key=lambda x: x[1], reverse=True)
+
+        # 计算筛选标的数量
+        context.stock_num = int(context.ratio * len(context.symbol_list))
+        # 重置标的池空列表
+        context.stock_pool = []
+        # 获取指定数量的标的
+        for i in sorted_rate[:context.stock_num]:
+            # 将筛选的标的添加到标的池
+            context.stock_pool.append(i[0])
+```
+
+指标代码:
+```python
+def indicators(context):
+    """指标"""
+    # 设置需要考虑最近 N 个交易日标的表现
+    period = 10
+    # 设置筛选标的的比例
+    context.ratio = 0.2
+    # 设置用于购买股票的资金比例
+    context.max_percent = 0.9
+
+    # 初始化历史 N 个交易日净值增长率
+    context.returns = {}
+    # 初始化历史 N 个交易日的波动率
+    context.volatility = {}
+    # 初始化夏普比率
+    context.sharpe_ratio = {}
+    # 初始化历史 N 个交易日的最大回撤
+    context.max_draw_down = {}
+
+    # 设置本次标的名称列表
+    context.stock_pool = []
+
+    # 遍历所有标的
+    for data in context.datas:
+        # 计算最近 N 个交易日的总收益率
+        context.returns[data._name] = ROC(data, period=period)
+
+        # 计算最近 N 个交易日的波动率
+        growth_rate = ROC(data, period=1)
+        context.volatility[data._name] = StdDev(growth_rate, period=period)
+
+        # 计算最近 N 个交易日的夏普比率
+        context.sharpe_ratio[data._name] = SharpeRatio(data, period=period)
+
+        # 计算最近 N 个交易日的最大回撤率
+        context.max_draw_down[data._name] = MaxDrawDownN(data, period=period)
+```
+
+择时代码:
+```python
+def timing(context):
+    """择时"""
+    # 如果当天月份与昨天月份不同
+    if context.current_date.month != context.previous_date.month:
+        
+        # 遍历上一次标的池数据
+        for name in context.last_stock_pool:
+            # 根据标的名称，获取标的数据
+            data = context.getdatabyname(name)
+
+            # 如果标的名称不在本次标的池中
+            if name not in context.stock_pool:
+                # 对标的进行平仓
+                context.close(data=data)
+
+        # 遍历本次标的池
+        for name in context.stock_pool:
+            # 根据标的名称，获取标的数据
+            data = context.getdatabyname(name)
+
+            # 如果该标的当前没有持仓
+            if context.getposition(data).size == 0:
+                # 计算单个标的能使用的资金
+                stock_value = context.broker.getvalue() * context.max_percent / context.stock_num
+                # 计算购买数量
+                size = stock_value / data.close[0] // 100 * 100
+                # 执行购买
+                context.buy(data=data, size=size)
+```
+
+风控代码:
+```python
+def control_risk(context):
+    """风控"""
+    pass
+```
+---
+策略详情 - 肯特纳通道策略
+
+基本信息:
+- ID: kB2dqbZ3xvNanyolQ0OlgJYR4DKeQ1r5
+- 名称: 肯特纳通道策略
+- 类型: 策略库策略
+
+策略代码:
+
+选股代码:
+```python
+def choose_stock(context):
+    """标的"""
+    context.symbol_list = ["JD2212.XDCE"]
+```
+
+指标代码:
+```python
+def indicators(context):
+    """指标"""
+    # 设置周期
+    context.period = 10
+    # 设置倍数
+    context.multi = 2
+
+    # 计算肯特纳通道相关指标
+    kc = KeltnerChannel(context.data, period=context.period, devfactor=context.multi)
+    # 获取肯特纳通道的中轨
+    context.middle_line = kc.mid
+    # 获取肯特纳通道的上轨
+    context.upper_line = kc.top
+    # 获取肯特纳通道的下轨
+    context.lower_line = kc.bot
+
+    # 计算收盘价与上轨的交叉信号
+    context.upper_signal = CrossOver(context.data.close, context.upper_line)
+    # 计算收盘价与下轨的交叉信号
+    context.lower_signal = CrossOver(context.data.close, context.lower_line)
+
+```
+
+择时代码:
+```python
+def timing(context):
+    """择时"""
+    # 获取当前仓位
+    position = context.getposition(context.data).size
+
+    # 如果当前交易日无持仓，且收盘价向上突破上轨，且中轨向上，出现做多信号
+    if position == 0 and context.upper_signal[0] > 0 and context.middle_line[0] > context.middle_line[-1]:
+        # 发送做多指令
+        context.order = context.buy()
+
+    # 如果当前交易日无持仓，且收盘价向下突破下轨，且中轨向下，出现做空信号
+    elif position == 0 and context.lower_signal[0] < 0 and context.middle_line[0] < context.middle_line[-1]:
+        # 发送做空指令
+        context.order = context.sell()
+
+    # 如果当前交易日持多仓，且收盘价向下突破中轨，出现平多信号
+    elif position > 0 and context.data.close[0] < context.middle_line[0]:
+        # 发送平多指令
+        context.order = context.close()
+
+    # 如果当前交易日持空仓，且收盘价向上突破中轨，出现平空信号
+    elif position < 0 and context.data.close[0] > context.middle_line[0]:
+        # 发送平空指令
+        context.order = context.close()
+```
+
+风控代码:
+```python
+def control_risk(context):
+    """风控"""
+    pass
+```
+---
+策略详情 - 网格交易策略
+
+基本信息:
+- ID: jJp3Onk2bLBd7QoKWom6e49gyZMxDRNY
+- 名称: 网格交易策略
+- 类型: 策略库策略
+
+策略代码:
+
+选股代码:
+```python
+def choose_stock(context):
+    """标的"""
+    # 设置标的：华夏中小企业100ETF
+    context.symbol_list = ["159902.XSHE"]
+```
+
+指标代码:
+```python
+def indicators(context):
+    """指标"""
+    # 设置档位总数
+    context.number = 10
+    # 设置初始仓位
+    context.open_percent = 0.5
+    # 设置挡位间距
+    context.distance = 0.05
+
+    # 设置初始订单状态
+    context.open_number = False
+
+```
+
+择时代码:
+```python
+def timing(context):
+    """择时"""
+    # 判断是否已买入初始订单
+    if not context.open_number:
+        # 记录基准价格
+        context.base_price = context.data.close[0]
+
+        # 计算所需买入的初始订单数量
+        buy_size = context.broker.getvalue() / context.data.close[0] * context.open_percent // 100 * 100
+        # 执行买入
+        context.buy(data=context.data, size=buy_size)
+
+        # 记录前一交易日的挡位，初始挡位是0
+        context.last_index = 0
+        # 计算每变化一挡对应的订单数量
+        context.per_size = context.broker.getvalue() / context.data.close[0] / context.number // 100 * 100
+        # 计算档位的上边界
+        context.max_index = round(context.number * context.open_percent)
+        # 计算档位的下边界，由于在初始挡位的下方，所以结果是负数
+        context.min_index = context.max_index - context.number 
+
+        # 更新初始订单状态
+        context.open_number = True
+        context.log('已买入初始订单')
+
+```
+
+风控代码:
+```python
+def control_risk(context):
+    """风控"""
+    # 判断是否已买入初始订单
+    if context.open_number:
+        # 计算今日挡位
+        index = (context.data.close[0] - context.base_price) // context.distance
+
+        # 如果今日挡位低于下边界
+        if index < context.min_index:
+            # 用下边界替代今日挡位
+            index = context.min_index
+        # 如果当前挡位高于上边界
+        elif index > context.max_index:
+            # 用上边界替代今日挡位
+            index = context.max_index
+
+        context.log("上一交易日挡位:{}".format(context.last_index))
+        context.log("当前交易日挡位:{}".format(index))
+
+        # 计算挡位变化数
+        change_index = index - context.last_index
+        # 如果挡位变化数大于0
+        if change_index > 0:
+            # 执行卖出
+            context.sell(data=context.data, size=change_index*context.per_size)
+        # 如果挡位变化数小于0
+        elif change_index < 0:
+            # 执行买入
+            context.buy(data=context.data, size=change_index*context.per_size)
+        
+        # 更新前一日挡位
+        context.last_index = index
+
+    context.log("当前持仓规模:{}".format(context.getposition(context.data).size))
+
+```
+---
+策略详情 - 小市值选股
+
+基本信息:
+- ID: aWnv1PqONRYK4g0vn0xmEQX6LkJrZebB
+- 名称: 小市值选股
+- 类型: 策略库策略
+
+策略代码:
+
+选股代码:
+```python
+def choose_stock(context):
+    """标的"""
+    # 设置基准标的
+    context.benchmark = "000852.XSHG"
+    # 设置指数
+    context.symbol_list = ["000852.XSHG"]
+    # 打开解析成分股参数
+    context.parse_index = True
+
+    # 如果入选标的列表为空
+    if context.stock_pool == []:
+        # 获取当前日期
+        current_date = context.data.datetime.date()
+
+        # 获取市值数据
+        valuation = context.get_fundamentals(date=current_date, type="valuation")
+        # 提取标的代码和市值数据
+        valuation = valuation[["symbol_exchange", "market_cap"]]
+        # 将数据按照市值从小到大进行排序
+        sorted_valuation = valuation.sort_values(by="market_cap")
+        # 取出标的名称
+        name_list = sorted_valuation["symbol_exchange"].to_list()
+
+        # 提取小市值标的
+        context.stock_pool = name_list[context.select_start:context.select_end]
+        # 打印筛选出来的标的
+        context.log("筛选出来的标的有:{}".format(context.stock_pool))
+```
+
+指标代码:
+```python
+def indicators(context):
+    """指标"""
+    # 设置账户最大使用资金比例
+    context.max_percent = 0.9
+
+    # 将买入状态设置为 False，表示未执行过买入操作
+    context.have_bought = False
+    # 初始化入选标的列表
+    context.stock_pool = []
+    # 设置小市值的筛选标准
+    context.select_start = 3
+    context.select_end = 33
+```
+
+择时代码:
+```python
+def timing(context):
+    """择时"""
+    # 如果入选标的列表不为空且尚未买入过标的
+    if context.stock_pool != [] and not context.have_bought:
+        # 计算单个标的的可用资金
+        stock_value = context.broker.getvalue() * context.max_percent / len(context.stock_pool)
+
+        # 遍历入选标的列表
+        for name in context.stock_pool:
+            # 获取入选标的对象
+            data = context.getdatabyname(name)
+
+            # 计算标的的买入数量
+            size = stock_value / data.close[0] // 100 * 100
+            # 执行买入操作
+            context.buy(data=data, size=size, price=data.close[0]*1.1)
+
+        # 将买入状态设置为 True，表示已执行过买入操作
+        context.have_bought = True
+```
+
+风控代码:
+```python
+def control_risk(context):
+    """风控"""
+    pass
+
+```
+---
+策略详情 - 市值+市净率 选股
+
+基本信息:
+- ID: bQjv2nDEkmrg7LA6q0KeaJNxRqlBYWV4
+- 名称: 市值+市净率 选股
+- 类型: 策略库策略
+
+策略代码:
+
+选股代码:
+```python
+def choose_stock(context):
+    """标的"""
+    # 设置基准标的
+    context.benchmark = "000300.XSHG"
+    # 设置标的
+    context.symbol_list = ["000300.XSHG"]
+    # 打开解析成分股参数
+    context.parse_index = True
+    
+    # 如果入选标的列表为空
+    if context.stock_pool == []:
+        # 获取当前日期
+        current_date = context.data.datetime.date()
+
+        # 获取市值数据
+        valuation_data = context.get_fundamentals(date=current_date, type="valuation")
+        # 取出标的代码、市净率、市销率数据
+        valuation_data = valuation_data[['symbol_exchange', 'pb_ratio', 'ps_ratio']]
+
+        # 获取分数数据，从1开始
+        rank_list = []
+        for i in range(1, len(valuation_data)+1):
+            rank_list.append(i)
+
+        # 根据市净率按大到小进行排序
+        valuation_data = valuation_data.sort_values(by='pb_ratio', ascending=False)
+        # 将市净率得分写入到市值数据中
+        valuation_data['pb_rank'] = rank_list
+
+        # 根据市销率按大到小进行排序
+        valuation_data = valuation_data.sort_values(by='ps_ratio', ascending=False)
+        # 将市销率得分写入到市值数据中
+        valuation_data['ps_rank'] = rank_list
+
+        # 计算总分
+        valuation_data['score'] = valuation_data['pb_rank'] + valuation_data['ps_rank']
+
+        # 根据分数从大到小进行排序
+        valuation_data = valuation_data.sort_values(by='score', ascending=False)
+
+        # 获取前 10 个股票名称，并添加到入选标的列表中
+        context.stock_pool = valuation_data['symbol_exchange'].to_list()[:10]
+
+        context.log('\n筛选出来的标的有{}'.format(context.stock_pool))
+```
+
+指标代码:
+```python
+def indicators(context):
+    """指标"""
+    # 设置账户最大使用资金
+    context.max_percent = 0.9
+
+    # 将买入状态设置为 False，表示未执行过买入操作
+    context.have_bought = False
+    # 初始化入选标的列表
+    context.stock_pool = []
+```
+
+择时代码:
+```python
+def timing(context):
+    """择时"""
+    # 如果未买入并且入选标的列表不为空
+    if not context.have_bought and context.stock_pool != []:
+        # 计算每个标的所能用的资金
+        stock_value = context.broker.getvalue() * context.max_percent / len(context.stock_pool)
+
+        # 遍历入选标的列表
+        for name in context.stock_pool:
+            # 获取入选的标的对象
+            data = context.getdatabyname(name)
+
+            # 计算买入数量
+            size = stock_value / data.close[0] // 100 * 100
+            # 执行买入操作
+            context.buy(data=data, size=size, price=data.close[0]*1.1)
+
+        # 将买入状态设置为 True，表示已执行过买入操作
+        context.have_bought = True
+```
+
+风控代码:
+```python
+def control_risk(context):
+    """风控"""
+    pass
+
+```
+---
+策略详情 - 市值+净利润同比增长率 选股
+
+基本信息:
+- ID: PwQ17ky2JjEzYW0Pv8gnMl3aNGVKpd4L
+- 名称: 市值+净利润同比增长率 选股
+- 类型: 策略库策略
+
+策略代码:
+
+选股代码:
+```python
+def choose_stock(context):
+    """标的"""
+    # 设置基准标的
+    context.benchmark = "000300.XSHG"
+    # 设置标的
+    context.symbol_list = ["000300.XSHG"]
+    # 打开解析成分股参数
+    context.parse_index = True
+
+    # 如果入选标的列表为空
+    if context.stock_pool == []: 
+        # 获取当前日期
+        current_date = context.data.datetime.date()
+
+        # 获取市值数据
+        valuation_data = context.get_fundamentals(date=current_date, type="valuation")
+        # 取出标的代码、市净率数据
+        valuation_data = valuation_data[['symbol_exchange', 'pb_ratio']]
+
+        # 获取分数数据，从1开始
+        rank_list = []
+        for i in range(1, len(valuation_data)+1):
+            rank_list.append(i)
+
+        # 根据市净率按大到小进行排序
+        valuation_data = valuation_data.sort_values(by='pb_ratio', ascending=False)
+        # 将市净率得分写入到市值数据中
+        valuation_data['pb_rank'] = rank_list
+
+        # 获取财务指标数据
+        indicator_data = context.get_fundamentals(date=current_date, type="indicator")
+        # 取出标的代码、净利润同比增长率数据
+        indicator_data = indicator_data[['symbol_exchange', 'inc_net_profit_year_on_year']]
+
+        # 按净利润增长率小到大进行排序
+        indicator_data = indicator_data.sort_values(by='inc_net_profit_year_on_year')
+        # 将净利润增长率得分写入到财务指标数据中
+        indicator_data['inc_net_profit_rank'] = rank_list
+
+        # 合并市值数据和财务指标数据
+        total_data = valuation_data.merge(indicator_data, on='symbol_exchange')
+
+        # 计算分数，并写入到总数据中
+        total_data['score'] = total_data['pb_rank'] + total_data['inc_net_profit_rank']
+
+        # 根据分数对总数据按大到小进行排序
+        total_data = total_data.sort_values(by='score', ascending=False)
+
+        # 获取前10个股票名称
+        context.stock_pool = total_data['symbol_exchange'].to_list()[:10]
+
+        context.log('\n筛选出来的标的{}'.format(context.stock_pool))
+```
+
+指标代码:
+```python
+def indicators(context):
+    """指标"""
+    # 设置账户最大使用资金
+    context.max_percent = 0.9
+
+    # 将买入状态设置为 False，表示未执行过买入操作
+    context.have_bought = False
+    # 初始化入选标的列表
+    context.stock_pool = []
+```
+
+择时代码:
+```python
+def timing(context):
+    """择时"""
+    # 如果未买入并且入选标的列表不为空
+    if not context.have_bought and context.stock_pool != []:
+        # 计算每个标的所能用的资金
+        stock_value = context.broker.getvalue() * context.max_percent / len(context.stock_pool)
+
+        # 遍历入选标的列表
+        for name in context.stock_pool:
+            # 获取入选的标的对象
+            data = context.getdatabyname(name)
+
+            # 计算买入数量
+            size = stock_value / data.close[0] // 100 * 100
+            # 执行买入操作
+            context.buy(data=data, size=size, price=data.close[0]*1.1)
+
+        # 将买入状态设置为 True，表示已执行过买入操作
+        context.have_bought = True
+```
+
+风控代码:
+```python
+def control_risk(context):
+    """风控"""
+    pass
+
+```
+---
+策略详情 - 框架代码（RSI指标）
+
+基本信息:
+- ID: lONjwgvzb5BWryoV189eLXJd1VqDZKQ3
+- 名称: 框架代码（RSI指标）
+- 类型: 策略库策略
+
+策略代码:
+
+选股代码:
+```python
+def choose_stock(context):
+    """选股"""
+    # 设置基准标的
+    context.benchmark = "000016.XSHG"
+    # 设置标的列表
+    context.symbol_list = ["000016.XSHG"]
+    context.parse_index = True
+```
+
+指标代码:
+```python
+def indicators(context):
+    """指标"""
+    # 设置每次买卖的数量
+    context.trade_size = 100
+    # 设置止盈比例
+    context.take_profit = 0.15
+    # 设置止损比例
+    context.stop_loss = 0.08
+
+    # 以上为每个策略都会用到的常用参数设置部分
+    # 接下来针对具体的策略，可以计算一些针对性的参数
+    # ------------------------------------------------------------------
+
+    # 初始化RSI指标上限
+    context.top = 70
+    # 初始化RSI指标下限
+    context.bot = 25
+    # 设置信号字典
+    context.rsi_dict = {}
+    # 设置RSI的计算周期
+    rsi_period = 6
+    # 遍历所有标的
+    for data in context.datas:
+        # 计算周期为6的RSI指标
+        rsi = RSI(data.close, period=rsi_period, safediv=True)
+        # 记录标的对应的RSI指标 
+        context.rsi_dict[data] = {'rsi': rsi}
+```
+
+择时代码:
+```python
+def timing(context):
+    """择时"""
+    # 设置交易字典
+    trade_dict = {'需买入的标的对象': [], '需买入标的的代码': [], '需卖出的标的对象': [], '需卖出的标的代码': []}
+    # 遍历所有标的
+    for data in context.datas:
+        # 获取RSI
+        rsi = context.rsi_dict[data]['rsi']
+
+        # 当RSI值低于其下限时
+        if rsi[0] < context.bot:
+            # 记录需要买入的标的对象
+            trade_dict['需买入的标的对象'].append(data)
+            # 记录需要买入标的对象的代码
+            trade_dict['需买入标的的代码'].append(data._name)
+        # 当RSI值高于其上限时
+        elif rsi[0] > context.top:
+            # 记录需要卖出的标的对象
+            trade_dict['需卖出的标的对象'].append(data)
+            # 记录需要卖出标的对象的代码
+            trade_dict['需卖出的标的代码'].append(data._name)
+
+    # 如果需买入标的的代码列表或需卖出的标的代码不为空：
+    if trade_dict['需买入标的的代码'] or trade_dict['需卖出的标的代码']:
+        # 打印列表中的信息
+        context.log('\n 需卖出的标的为：{} \n 需买入的标的为：{}'.format(trade_dict['需卖出的标的代码'], trade_dict['需买入标的的代码']))
+
+    # 择时到此，将输出所有标的需要操作的状态，新的策略只需要在这之前根据策略内容输出对应的状态即可
+    # 接下来执行交易
+
+    # 遍历需要卖出的标的
+    for sell_data in trade_dict['需卖出的标的对象']:
+        # 获取持仓数量
+        hold_size = context.getposition(sell_data).size
+        # 如果持仓数量大于0
+        if hold_size > 0:
+            # 执行平仓，订单类型为市价单
+            context.close(data=sell_data, price=sell_data.close[0]*0.9)
+            # # 执行平仓，订单类型为限价单
+            # context.sell(data=sell_data, size=hold_size, price=sell_data.close[0], exectype=Order.Limit)
+
+    # 遍历需要买入的标的
+    for buy_data in trade_dict['需买入的标的对象']:
+        # 执行买入，订单类型为市价单
+        context.buy(data=buy_data, size=context.trade_size, price=buy_data.close[0]*1.1)
+        # # 执行买入，订单类型为限价单
+        # context.buy(data=buy_data, size=context.trade_size, price=buy_data.close[0], exectype=Order.Limit)
+
+```
+
+风控代码:
+```python
+def control_risk(context):
+    """风控"""
+    # 遍历所有标的
+    for data in context.datas:
+        # 获取标的当前持仓数量
+        hold_size = context.getposition(data).size
+        # 如果有持仓
+        if hold_size > 0:
+            # 获取持仓均价
+            hold_price = context.getposition(data).price
+            # 计算止损价
+            stop_price = (1 - context.stop_loss) * hold_price
+            # 计算止盈价
+            profit_price = (1 + context.take_profit) * hold_price
+
+            # 如果当前价格达到了止盈或止损价
+            if data.close[0] < stop_price or data.close[0] > profit_price:
+                # 执行平仓
+                context.close(data=data, price=data.close[0]*0.9)
+                context.log("执行了止盈或止损")
+```
+---
+策略详情 - 框架代码+单日资金和总资金风控
+
+基本信息:
+- ID: rkxdaDLRbPmwqyAwP8lz4e6MXpEWN7YO
+- 名称: 框架代码+单日资金和总资金风控
+- 类型: 策略库策略
+
+策略代码:
+
+选股代码:
+```python
+def choose_stock(context):
+    """选股"""
+    # 设置基准标的
+    context.benchmark = "000300.XSHG"
+    # 设置标的列表
+    context.symbol_list = ["000300.XSHG"]
+    context.parse_index = True
+```
+
+指标代码:
+```python
+def indicators(context):
+    """指标"""
+    # 设置每次买卖的数量
+    context.trade_size = 100
+    # 设置止盈比例
+    context.take_profit = 0.15
+    # 设置止损比例
+    context.stop_loss = 0.08
+
+    # 以上为每个策略都会用到的常用参数设置部分
+    # 接下来针对具体的策略，可以计算一些针对性的参数
+    # ------------------------------------------------------------------
+
+    # 初始化RSI指标上限
+    context.top = 70
+    # 初始化RSI指标下限
+    context.bot = 25
+    # 设置指标字典
+    context.rsi_dict = {}
+    # 设置RSI的计算周期
+    rsi_period = 6
+    # 遍历所有标的
+    for data in context.datas:
+        # 计算周期为6的RSI指标
+        rsi = RSI(data.close, period=rsi_period, safediv=True)
+        # 记录标的对应的RSI指标
+        context.rsi_dict[data] = {'rsi': rsi}
+
+    # 设置最大使用资金比例
+    context.max_percent = 0.8
+    # 设置每天最大使用资金比例
+    context.day_max_percent = 0.4
+```
+
+择时代码:
+```python
+def timing(context):
+    """择时"""
+    # 设置信号字典
+    trade_dict = {'需买入的标的对象': [], '需买入标的的代码': [], '需卖出的标的对象': [], '需卖出的标的代码': []}
+    # 遍历所有标的
+    for data in context.datas:
+        # 获取RSI
+        rsi = context.rsi_dict[data]['rsi']
+
+        # 当RSI值低于其下限时
+        if rsi[0] < context.bot:
+            # 记录需要买入的标的对象
+            trade_dict['需买入的标的对象'].append(data)
+            # 记录需要买入标的对象的代码
+            trade_dict['需买入标的的代码'].append(data._name)
+        # 当RSI值高于其上限时
+        elif rsi[0] > context.top:
+            # 记录需要卖出的标的对象
+            trade_dict['需卖出的标的对象'].append(data)
+            # 记录需要卖出标的对象的代码
+            trade_dict['需卖出的标的代码'].append(data._name)
+
+    # 如果需买入标的的代码列表或需卖出的标的代码不为空：
+    if trade_dict['需买入标的的代码'] or trade_dict['需卖出的标的代码']:
+        # 打印列表中的信息
+        context.log('\n 需卖出的标的为：{} \n 需买入的标的为：{}'.format(trade_dict['需卖出的标的代码'], trade_dict['需买入标的的代码']))
+
+    # 择时到此，将输出所有标的需要操作的状态，新的策略只需要在这之前根据策略内容输出对应的状态即可
+
+    # 设置记录当天买入资金为0
+    day_buy_value = 0
+    # 获取所有已委托的订单
+    submitted_orders = context.get_orders(status='submitted')
+    # 遍历所有已委托的订单
+    for order in submitted_orders:
+        # 如果该委托单为买入
+        if order.ordtype == 0:
+            # 计算订单金额
+            order_value = order.created.price * order.created.size
+            # 将订单金额累加到当天买入资金变量中
+            day_buy_value += order_value
+
+    # 获取所有已成交的订单
+    completed_orders = context.get_orders(status='completed')
+    # 遍历所有已成交的订单
+    for order in completed_orders:
+        # 如果该成交单为买入
+        if order.ordtype == 0:
+            # 获取订单金额，并累加到当天买入资金变量中
+            day_buy_value += order.executed.value
+
+    # 当天买入资金需要减去取消的订单金额
+    day_buy_value -= canceled_value
+
+    # 接下来执行交易
+
+    # 遍历需要卖出的标的
+    for sell_data in trade_dict['需卖出的标的对象']:
+        # 获取持仓数量
+        hold_size = context.getposition(sell_data).size
+        # 如果持仓数量大于0
+        if hold_size > 0:
+            # 执行平仓，订单类型为市价单
+            context.close(data=sell_data, price=sell_data.close[0]*0.9)
+            # # 执行平仓，订单类型为限价单
+            # context.sell(data=sell_data, size=hold_size, price=sell_data.close[0], exectype=Order.Limit)
+
+    # 遍历需要买入的标的
+    for buy_data in trade_dict['需买入的标的对象']:
+        # 计算当前买入所需的资金
+        buy_value = buy_data.close[0] * context.trade_size
+        # 计算当天用于买入的资金比例
+        day_buy_percent = (day_buy_value + buy_value) / context.broker.getvalue()
+        # 计算剩余的现金比例
+        remaining_cash_percent = (context.broker.cash - buy_value) / context.broker.getvalue()
+
+        # 如果当天用于买入的资金比例小于每天最大买入资金比例，并且投入的总资金不超过最大资金使用比例
+        if day_buy_percent < context.day_max_percent and remaining_cash_percent > (1 - context.max_percent):
+            # 执行买入，订单类型为市价单
+            order = context.buy(data=buy_data, size=context.trade_size, price=buy_data.close[0]*1.1)
+            # # 执行买入，订单类型为限价单
+            # order = context.buy(data=buy_data, size=context.trade_size, price=buy_data.close[0], exectype=Order.Limit)
+
+            # 如果order的值不为None
+            if order:
+                # 将本次买入金额累加到当天买入资金变量中
+                day_buy_value += buy_value
+```
+
+风控代码:
+```python
+def control_risk(context):
+    """风控"""
+    # 遍历所有标的
+    for data in context.datas:
+        # 获取标的当前持仓数量
+        hold_size = context.getposition(data).size
+        # 如果有持仓
+        if hold_size > 0:
+            # 获取持仓均价
+            hold_price = context.getposition(data).price
+            # 计算止损价
+            stop_price = (1 - context.stop_loss) * hold_price
+            # 计算止盈价
+            profit_price = (1 + context.take_profit) * hold_price
+
+            # 如果当前价格达到了止盈或止损价
+            if data.close[0] < stop_price or data.close[0] > profit_price:
+                # 执行平仓
+                context.close(data=data, price=data.close[0]*0.9)
+                context.log("执行了止盈或止损")
+```
+---
+策略详情 - RSI-标的池-分钟回测V6
+
+基本信息:
+- ID: QYgmqJZNkRvDzb0Yy0lxWO9PpXGKaM2L
+- 名称: RSI-标的池-分钟回测V6
+- 类型: 策略库策略
+
+策略代码:
+
+选股代码:
+```python
+def choose_stock(context):
+    """选股"""
+    # 设置基准标的
+    context.benchmark = "510360.XSHG"
+    # 设置标的列表
+    context.symbol_list = ["601398.XSHG", "000725.XSHE", "002717.XSHE", "600028.XSHG", "510360.XSHG"]
+```
+
+指标代码:
+```python
+def indicators(context):
+    """指标"""
+    # 设置每次买卖的数量
+    context.trade_size = 100
+    # 设置止盈比例
+    context.take_profit = 0.15
+    # 设置止损比例
+    context.stop_loss = 0.08
+
+    # 以上为每个策略都会用到的常用参数设置部分
+    # 接下来针对具体的策略，可以计算一些针对性的参数
+    # ------------------------------------------------------------------
+
+    # 初始化RSI指标上限
+    context.top = 75
+    # 初始化RSI指标下限
+    context.bot = 25
+    # 设置指标字典
+    context.rsi_dict = {}
+    # 设置RSI的计算周期
+    rsi_period = 6
+    # 遍历所有标的
+    for data in context.datas:
+        # 计算周期为6的RSI指标
+        rsi = RSI(data.close, period=rsi_period, safediv=True)
+        # 记录标的对应的RSI指标 
+        context.rsi_dict[data] = {'rsi': rsi}
+
+    # ------------------资金风控
+    # 设置最大使用资金比例
+    context.max_percent = 0.8
+    # 设置每天最大使用资金比例
+    context.day_max_percent = 0.3
+
+    # ------------------取消订单
+    # 设置订单取消间隔时间为1800秒
+    context.cancel_interval = 1800
+```
+
+择时代码:
+```python
+def timing(context):
+    """择时"""
+    # 设置信号字典
+    trade_dict = {'需买入的标的对象': [], '需买入标的的代码': [], '需卖出的标的对象': [], '需卖出的标的代码': []}
+    # 遍历所有标的
+    for data in context.datas:
+        # 获取RSI
+        rsi = context.rsi_dict[data]['rsi']
+
+        # 当RSI值低于其下限时
+        if rsi[0] < context.bot:
+            # 记录需要买入的标的对象
+            trade_dict['需买入的标的对象'].append(data)
+            # 记录需要买入标的对象的代码
+            trade_dict['需买入标的的代码'].append(data._name)
+        # 当RSI值高于其上限时
+        elif rsi[0] > context.top:
+            # 记录需要卖出的标的对象
+            trade_dict['需卖出的标的对象'].append(data)
+            # 记录需要卖出标的对象的代码
+            trade_dict['需卖出的标的代码'].append(data._name)
+
+    # 如果需买入标的的代码列表或需卖出的标的代码不为空：
+    if trade_dict['需买入标的的代码'] or trade_dict['需卖出的标的代码']:
+        # 打印列表中的信息
+        context.log('\n 需卖出的标的为：{} \n 需买入的标的为：{}'.format(trade_dict['需卖出的标的代码'], trade_dict['需买入标的的代码']))
+
+    # 择时到此，将输出所有标的需要操作的状态，新的策略只需要在这之前根据策略内容输出对应的状态即可
+
+    # -------------------取消订单
+    # 设置取消订单金额为0
+    canceled_value = 0
+    # 获取当前日期时间
+    current_datetime = context.datetime.datetime()
+
+    # 获取所有已委托的订单
+    submitted_orders = context.get_orders(status='submitted')
+    # 遍历所有已委托的订单
+    for order in submitted_orders:
+        # 获取委托创建时间
+        created_time = order.created_at
+        # 获取当前距离委托时，间隔的秒数
+        interval_now = (current_datetime - created_time).seconds
+
+        # 如果该委托单为买入并且当前距离委托的间隔时间达到订单取消间隔时间
+        if order.ordtype == 0 and interval_now >= context.cancel_interval:
+            # 取消订单
+            context.cancel(order)
+            # 计算订单金额
+            order_value = order.created.price * order.created.size
+            # 将订单金额累加到取消清单金额中
+            canceled_value += order_value
+
+    # -------------------资金风控--计算今天花费总资金(不包含现在)
+    # 设置记录当天买入资金为0
+    day_buy_value = 0
+    # 遍历所有已委托的订单
+    for order in submitted_orders:
+        # 如果该委托单为买入
+        if order.ordtype == 0:
+            # 计算订单金额
+            order_value = order.created.price * order.created.size
+            # 将订单金额累加到当天买入资金变量中
+            day_buy_value += order_value
+
+    # 当天买入资金需要减去取消的订单金额
+    day_buy_value -= canceled_value
+
+    # 获取所有已成交的订单
+    completed_orders = context.get_orders(status='completed')
+    # 遍历所有已成交的订单
+    for order in completed_orders:
+        # 如果该成交单为买入
+        if order.ordtype == 0:
+            # 获取订单金额，并累加到当天买入资金变量中
+            day_buy_value += order.executed.value
+
+    # 接下来执行交易
+
+    # 遍历需要卖出的标的
+    for sell_data in trade_dict['需卖出的标的对象']:
+        # 获取当天可交易的数量
+        salable_size = context.getposition(sell_data).available
+
+        # 如果可交易数量大于0
+        if salable_size > 0:
+            # 卖出所有持仓数量，订单类型为市价单
+            context.sell(data=sell_data, size=salable_size,price=sell_data.close[0])
+            # # 执行卖出，订单类型为限价单
+            # context.sell(data=sell_data, size=salable_size, price=sell_data.close[0], exectype=Order.Limit)
+
+    # 遍历需要买入的标的
+    for buy_data in trade_dict['需买入的标的对象']:
+
+        # -------------------资金风控--计算今天花费总资金(包含现在)
+
+        # 计算当前买入所需的资金
+        buy_value = buy_data.close[0] * context.trade_size
+        # 计算当天用于买入的资金比例
+        day_buy_percent = (day_buy_value + buy_value) / context.broker.getvalue()
+        # 计算剩余的现金比例
+        remaining_cash_percent = (context.broker.cash - buy_value) / context.broker.getvalue()
+
+        # 如果当天用于买入的资金比例小于每天最大买入资金比例，并且投入的总资金不超过最大资金使用比例
+        if day_buy_percent < context.day_max_percent and remaining_cash_percent > (1 - context.max_percent):
+            # # 执行买入，订单类型为市价单
+            # order = context.buy(data=buy_data, size=context.trade_size)
+            # 执行买入，订单类型为限价单
+            order = context.buy(data=buy_data, size=context.trade_size, price=buy_data.close[0], exectype=Order.Limit)
+
+            # 如果order不为None
+            if order:
+                # 将本次买入金额累加到当天买入资金变量中
+                day_buy_value += buy_value
+```
+
+风控代码:
+```python
+def control_risk(context):
+    """风控"""
+    # 遍历所有标的
+    for data in context.datas:
+        # # 获取标的当前持仓数量
+        # hold_size = context.getposition(data).size
+        # 获取当天可交易的数量
+        salable_size = context.getposition(data).available
+        # 如果有持仓
+        if salable_size > 0:
+            # 获取持仓均价
+            hold_price = context.getposition(data).price
+            # 计算止损价
+            stop_price = (1 - context.stop_loss) * hold_price
+            # 计算止盈价
+            profit_price = (1 + context.take_profit) * hold_price
+            
+            # 如果当前价格达到了止盈或止损价
+            if data.close[0] < stop_price or data.close[0] > profit_price:
+                # 执行平仓
+                context.sell(data=data, size=salable_size,price=data.close[0])
+                context.log("执行了止盈或止损")

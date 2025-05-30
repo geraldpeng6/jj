@@ -11,7 +11,7 @@ import logging
 from typing import Dict, Any, List, Optional
 from pydantic import Field
 from mcp.server.fastmcp import FastMCP
-from mcp.types import PromptMessage, TextContent, EmbeddedResource, TextResourceContents
+from mcp.types import PromptMessage, TextContent
 
 # 获取日志记录器
 logger = logging.getLogger('quant_mcp.kline_prompts')
@@ -36,9 +36,6 @@ def register_prompts(mcp: FastMCP):
         analysis_type: str = Field(default="all", description="分析类型 [默认值: all] [建议: trend, pattern, indicator, all]")
     ) -> List[PromptMessage]:
         """分析股票K线数据并提供见解"""
-        # 构建资源URI
-        resource_uri = f"kline://{exchange}/{symbol}/{resolution}"
-
         # 构建提示消息
         messages = [
             PromptMessage(
@@ -53,19 +50,8 @@ def register_prompts(mcp: FastMCP):
                     f"2. 成交量分析\n"
                     f"3. 主要技术指标（如MACD、RSI等）\n"
                     f"4. 形态识别（如头肩顶、双底等）\n"
-                    f"5. 总体市场观点和可能的交易机会"
-                )
-            ),
-            # 添加资源消息
-            PromptMessage(
-                role="user",
-                content=EmbeddedResource(
-                    type="resource",
-                    resource=TextResourceContents(
-                        uri=resource_uri,
-                        mimeType="text/csv",
-                        text=""  # 添加必需的text字段
-                    )
+                    f"5. 总体市场观点和可能的交易机会\n\n"
+                    f"请注意：由于数据资源已被移除，您将需要使用其他数据源或提供数据进行分析。"
                 )
             )
         ]
@@ -103,29 +89,11 @@ def register_prompts(mcp: FastMCP):
                     f"3. 波动性比较\n"
                     f"4. 成交量对比\n"
                     f"5. 相关性分析\n"
-                    f"6. 总体评估和投资建议"
+                    f"6. 总体评估和投资建议\n\n"
+                    f"请注意：由于数据资源已被移除，您将需要使用其他数据源或提供数据进行分析。"
                 )
             )
         ]
-
-        # 为每个股票添加资源消息
-        for symbol in symbol_list:
-            symbol = symbol.strip()
-            resource_uri = f"kline://{exchange}/{symbol}/{resolution}"
-
-            messages.append(
-                PromptMessage(
-                    role="user",
-                    content=EmbeddedResource(
-                        type="resource",
-                        resource=TextResourceContents(
-                            uri=resource_uri,
-                            mimeType="text/csv",
-                            text=""  # 添加必需的text字段
-                        )
-                    )
-                )
-            )
 
         return messages
 

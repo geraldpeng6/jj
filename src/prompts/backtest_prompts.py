@@ -4,14 +4,14 @@
 """
 回测分析提示模块
 
-提供回测结果分析相关的MCP提示模板，包括回测绩效评估、策略改进等
+提供回测分析相关的MCP提示模板，包括回测结果分析、策略优化等
 """
 
 import logging
 from typing import Dict, Any, List, Optional
 from pydantic import Field
 from mcp.server.fastmcp import FastMCP
-from mcp.types import PromptMessage, TextContent, EmbeddedResource, TextResourceContents
+from mcp.types import PromptMessage, TextContent
 
 # 获取日志记录器
 logger = logging.getLogger('quant_mcp.backtest_prompts')
@@ -24,7 +24,7 @@ def register_prompts(mcp: FastMCP):
         mcp: MCP服务器实例
     """
 
-    # 注册回测结果分析提示处理函数
+    # 注册回测分析提示处理函数
     @mcp.prompt(
         name="analyze_backtest",
         description="分析策略回测结果并提供见解"
@@ -47,9 +47,6 @@ def register_prompts(mcp: FastMCP):
         Returns:
             List[PromptMessage]: 提示消息列表
         """
-        # 构建资源URI
-        resource_uri = f"backtest://{strategy_name}/{backtest_period}"
-        
         # 回测周期映射
         period_map = {
             "3m": "近3个月",
@@ -77,19 +74,8 @@ def register_prompts(mcp: FastMCP):
                     f"6. 潜在的过拟合风险评估\n"
                     f"7. 策略改进和优化建议\n"
                     f"8. 实盘应用的注意事项\n\n"
-                    f"请提供详细的分析，并解释各项指标的含义和重要性。"
-                )
-            ),
-            # 添加资源消息
-            PromptMessage(
-                role="user",
-                content=EmbeddedResource(
-                    type="resource",
-                    resource=TextResourceContents(
-                        uri=resource_uri,
-                        mimeType="application/json",
-                        text=""  # 添加必需的text字段
-                    )
+                    f"请提供详细的分析，并解释各项指标的含义和重要性。\n\n"
+                    f"请注意：由于数据资源已被移除，您将需要使用其他数据源或提供数据进行分析。"
                 )
             )
         ]
@@ -119,9 +105,6 @@ def register_prompts(mcp: FastMCP):
         Returns:
             List[PromptMessage]: 提示消息列表
         """
-        # 构建资源URI
-        resource_uri = f"backtest://{strategy_name}/latest"
-        
         # 优化目标映射
         goal_map = {
             "returns": "收益率",
@@ -167,19 +150,8 @@ def register_prompts(mcp: FastMCP):
                     f"6. 针对特定市场环境的适应性调整\n"
                     f"7. 可能的策略变体或组合策略\n"
                     f"8. 优化后预期效果和潜在风险\n\n"
-                    f"请提供具体、可操作的优化建议，并解释每项建议的理论依据和预期效果。"
-                )
-            ),
-            # 添加资源消息
-            PromptMessage(
-                role="user",
-                content=EmbeddedResource(
-                    type="resource",
-                    resource=TextResourceContents(
-                        uri=resource_uri,
-                        mimeType="application/json",
-                        text=""  # 添加必需的text字段
-                    )
+                    f"请提供具体、可操作的优化建议，并解释每项建议的理论依据和预期效果。\n\n"
+                    f"请注意：由于数据资源已被移除，您将需要使用其他数据源或提供数据进行分析。"
                 )
             )
         ]
@@ -240,56 +212,21 @@ def register_prompts(mcp: FastMCP):
                 content=TextContent(
                     type="text",
                     text=f"请比较以下策略在{period_map.get(comparison_period, '近1年')}的回测结果：{strategies_text}，"
-                    f"重点比较{focus_map.get(comparison_focus, '综合表现')}，"
-                    f"{'并与基准进行对比' if include_benchmark else '不包含基准对比'}。\n\n"
+                    f"重点分析{focus_map.get(comparison_focus, '综合表现')}，"
+                    f"{'包含基准比较' if include_benchmark else '不包含基准比较'}。\n\n"
                     f"比较分析应包括：\n"
-                    f"1. 各策略的关键绩效指标对比（收益率、夏普比率、最大回撤等）\n"
-                    f"2. 风险收益特征比较\n"
-                    f"3. 不同市场环境下的相对表现\n"
-                    f"4. 交易特征对比（交易频率、持仓时间、胜率等）\n"
+                    f"1. 关键绩效指标的对比（年化收益率、夏普比率、最大回撤等）\n"
+                    f"2. 不同市场环境下的相对表现\n"
+                    f"3. 风险特征的比较\n"
+                    f"4. 交易行为和效率的对比\n"
                     f"5. 各策略的优势和劣势分析\n"
-                    f"6. 策略间的相关性分析\n"
-                    f"7. 策略组合的可能性评估\n"
-                    f"8. 综合评价和推荐\n\n"
-                    f"请提供详细的比较分析，并使用表格或其他清晰的方式展示关键指标的对比。"
+                    f"6. 策略相关性和多策略组合可行性\n"
+                    f"7. 适合不同投资目标的策略推荐\n"
+                    f"8. 整体评价和排名\n\n"
+                    f"请提供详细的比较分析，并使用图表和数据说明各项比较结果。\n\n"
+                    f"请注意：由于数据资源已被移除，您将需要使用其他数据源或提供数据进行分析。"
                 )
             )
         ]
-
-        # 为每个策略添加资源消息
-        for strategy in strategy_list:
-            resource_uri = f"backtest://{strategy}/{comparison_period}"
-            
-            messages.append(
-                PromptMessage(
-                    role="user",
-                    content=EmbeddedResource(
-                        type="resource",
-                        resource=TextResourceContents(
-                            uri=resource_uri,
-                            mimeType="application/json",
-                            text=""  # 添加必需的text字段
-                        )
-                    )
-                )
-            )
-        
-        # 如果包含基准，添加基准资源
-        if include_benchmark:
-            benchmark_uri = f"backtest://benchmark/{comparison_period}"
-            
-            messages.append(
-                PromptMessage(
-                    role="user",
-                    content=EmbeddedResource(
-                        type="resource",
-                        resource=TextResourceContents(
-                            uri=benchmark_uri,
-                            mimeType="application/json",
-                            text=""  # 添加必需的text字段
-                        )
-                    )
-                )
-            )
 
         return messages
