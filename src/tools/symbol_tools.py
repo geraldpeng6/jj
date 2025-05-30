@@ -7,8 +7,9 @@
 提供股票符号相关的MCP工具
 """
 
+import json
 import logging
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from mcp.server.fastmcp import FastMCP
 
 from utils.symbol_utils import get_symbol_info, search_symbols
@@ -83,7 +84,7 @@ async def get_stock_info(full_name: str) -> str:
         return f"获取股票信息时发生错误: {e}"
 
 
-async def search_stocks(query: str, exchange: str = "ANY", symbol_type: str = "") -> str:
+async def search_stocks(query: str, exchange: str = "ANY", symbol_type: str = "") -> List[Dict[str, Any]]:
     """
     搜索股票，支持通过股票代码或名称进行搜索
 
@@ -93,44 +94,21 @@ async def search_stocks(query: str, exchange: str = "ANY", symbol_type: str = ""
         symbol_type: 股票类型，默认为空字符串表示所有类型
 
     Returns:
-        str: 格式化的搜索结果，或错误信息
+        List[Dict[str, Any]]: 搜索结果列表，每个结果包含股票信息
     """
     try:
         # 从utils模块搜索股票
         symbols = search_symbols(query, exchange, symbol_type)
-
+        
         if not symbols:
-            return f"未找到与 '{query}' 匹配的股票"
-
-        # 格式化输出
-        result_str = f"搜索结果 - 关键词: '{query}'\n\n"
-        result_str += f"找到 {len(symbols)} 个匹配的股票:\n\n"
-
-        # 添加表头
-        result_str += "代码\t\t交易所\t类型\t名称\n"
-        result_str += "----\t\t----\t----\t----\n"
-
-        # 添加搜索结果
-        for symbol in symbols:
-            code = symbol.get('symbol', '-')
-            exchange = symbol.get('exchange', '-')
-            symbol_type = symbol.get('type', '-')
-            name = symbol.get('description', '-')
-            full_name = symbol.get('full_name', f"{code}.{exchange}")
-
-            result_str += f"{code}\t\t{exchange}\t{symbol_type}\t{name}\n"
-
-        # 添加使用提示
-        result_str += "\n可以使用 get_stock_info 工具获取详细信息，例如:\n"
-        if symbols and len(symbols) > 0:
-            example_symbol = symbols[0].get('full_name', "600000.XSHG")
-            result_str += f"get_stock_info(full_name='{example_symbol}')"
-
-        return result_str
+            return []
+        
+        # 直接返回搜索结果
+        return symbols
 
     except Exception as e:
         logger.error(f"搜索股票时发生错误: {e}")
-        return f"搜索股票时发生错误: {e}"
+        return []
 
 
 def register_tools(mcp: FastMCP):
