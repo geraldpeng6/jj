@@ -87,7 +87,7 @@ def get_symbol_info(full_name: str) -> Optional[Dict[str, Any]]:
         return None
 
 
-def search_symbols(query: str, exchange: str = "ANY", symbol_type: str = "", limit: int = 50, 
+def search_symbols(query: str, exchange: str = "ANY", symbol_type: str = "", limit: int = -1, 
                   sort_by: str = "symbol", sort_order: str = "asc") -> Optional[List[Dict[str, Any]]]:
     """
     搜索证券符号，支持通过代码或名称进行搜索，包括股票、指数、基金等各种证券类型
@@ -96,7 +96,7 @@ def search_symbols(query: str, exchange: str = "ANY", symbol_type: str = "", lim
         query: 搜索关键词，可以是证券代码或名称
         exchange: 交易所代码，默认为"ANY"表示所有交易所
         symbol_type: 证券类型，默认为空字符串表示所有类型，可选值包括"stock"(股票)、"index"(指数)、"fund"(基金)等
-        limit: 返回结果的最大数量，默认为50
+        limit: 返回结果的最大数量，默认为-1表示不限制
         sort_by: 排序字段，默认为"symbol"，可选值包括"symbol"、"exchange"、"type"、"description"
         sort_order: 排序顺序，默认为"asc"升序，可选值为"desc"降序
 

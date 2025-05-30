@@ -85,7 +85,7 @@ async def get_stock_info(full_name: str) -> str:
 
 
 async def search_stocks(query: str, exchange: str = "ANY", symbol_type: str = "", 
-                       limit: int = 50, sort_by: str = "symbol", sort_order: str = "asc") -> List[Dict[str, Any]]:
+                       limit: int = -1, sort_by: str = "symbol", sort_order: str = "asc") -> List[Dict[str, Any]]:
     """
     搜索股票，支持通过股票代码或名称进行搜索
 
@@ -93,7 +93,7 @@ async def search_stocks(query: str, exchange: str = "ANY", symbol_type: str = ""
         query: 搜索关键词，可以是股票代码或名称
         exchange: 交易所代码，默认为"ANY"表示所有交易所
         symbol_type: 股票类型，默认为空字符串表示所有类型
-        limit: 返回结果的最大数量，默认为50
+        limit: 返回结果的最大数量，默认为-1表示不限制
         sort_by: 排序字段，默认为"symbol"，可选值包括"symbol"、"exchange"、"type"、"description"
         sort_order: 排序顺序，默认为"asc"升序，可选值为"desc"降序
 
