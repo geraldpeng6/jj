@@ -134,22 +134,33 @@ async def run_strategy_backtest(
         
         # 首先尝试从用户策略库获取
         user_strategy = get_strategy_detail(strategy_id, "user")
-        if not user_strategy:
+        if user_strategy:
+            # 优先使用用户策略的名称
+            strategy_name = user_strategy.get('name') or user_strategy.get('strategy_name')
+            if strategy_name:
+                logger.info(f"从用户策略库获取到策略名称: {strategy_name}")
+            else:
+                logger.info(f"用户策略存在但没有名称，尝试从策略库获取")
+            strategy_data = user_strategy
+        
+        # 如果没有从用户策略获取到名称，尝试从策略库获取
+        if not strategy_name:
             # 尝试从系统策略库获取
             library_strategy = get_strategy_detail(strategy_id, "library")
-            if not library_strategy:
-                error_msg = f"未找到策略: {strategy_id}"
-                logger.error(error_msg)
-                return error_msg
-            else:
+            if library_strategy:
                 strategy_name = library_strategy.get('name') or library_strategy.get('strategy_name')
                 logger.info(f"从系统策略库获取到策略名称: {strategy_name}")
-                strategy_data = library_strategy
-        else:
-            strategy_name = user_strategy.get('name') or user_strategy.get('strategy_name')
-            logger.info(f"从用户策略库获取到策略名称: {strategy_name}")
-            strategy_data = user_strategy
+                # 如果之前没有获取到策略数据，使用库策略数据
+                if not strategy_data:
+                    strategy_data = library_strategy
             
+        # 如果仍然没有获取到策略数据，说明两处都没有找到
+        if not strategy_data:
+            error_msg = f"未找到策略: {strategy_id}"
+            logger.error(error_msg)
+            return error_msg
+        
+        # 如果名称仍为空，使用默认名称
         if not strategy_name:
             strategy_name = "未命名策略"
             logger.warning(f"无法获取策略名称，使用默认名称: {strategy_name}")

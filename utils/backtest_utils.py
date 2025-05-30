@@ -1157,35 +1157,58 @@ def run_backtest(
         }
     }
 
-    # 获取认证信息
-    token, user_id = get_auth_info()
-    if not token or not user_id:
-        error_msg = "无法获取认证信息，请检查认证配置"
-        logger.error(error_msg)
-        result['error'] = error_msg
-        return result
-
-    # 从API获取策略详情
-    from utils.strategy_utils import get_strategy_detail
-    strategy_data = get_strategy_detail(strategy_id, "user")
-    if not strategy_data:
-        error_msg = f"未找到策略: {strategy_id}"
-        logger.error(error_msg)
-        result['error'] = error_msg
-        return result
-
-    # 获取策略名称，优先使用name字段，其次使用strategy_name字段
-    strategy_name = strategy_data.get('name')
-    if not strategy_name:
-        strategy_name = strategy_data.get('strategy_name')
-    if not strategy_name:
-        strategy_name = '未命名策略'
-
-    result['strategy_name'] = strategy_name
-
-    logger.info(f"开始运行回测，策略: {strategy_name} (ID: {strategy_id})，监听时间: {listen_time}秒")
-
     try:
+        # 创建MQTT客户端
+        mqtt_client = MQTTBacktestClient()
+
+        # 获取认证信息
+        token, user_id = get_auth_info()
+        if not token or not user_id:
+            error_msg = "无法获取认证信息，请检查认证配置"
+            logger.error(error_msg)
+            result['error'] = error_msg
+            return result
+
+        # 从API获取策略详情
+        from utils.strategy_utils import get_strategy_detail
+        strategy_data = get_strategy_detail(strategy_id, "user")
+        strategy_name = None
+        
+        if strategy_data:
+            # 优先使用用户策略的名称
+            strategy_name = strategy_data.get('name') or strategy_data.get('strategy_name')
+            if strategy_name:
+                logger.info(f"从用户策略库获取到策略名称: {strategy_name}")
+            else:
+                logger.info(f"用户策略存在但没有名称，尝试从策略库获取")
+        
+        # 如果没有从用户策略获取到名称，尝试从策略库获取
+        if not strategy_name:
+            # 尝试从系统策略库获取
+            library_strategy = get_strategy_detail(strategy_id, "library")
+            if library_strategy:
+                strategy_name = library_strategy.get('name') or library_strategy.get('strategy_name')
+                logger.info(f"从系统策略库获取到策略名称: {strategy_name}")
+                # 如果之前没有获取到策略数据，使用库策略数据
+                if not strategy_data:
+                    strategy_data = library_strategy
+        
+        # 如果仍然没有获取到策略数据，说明两处都没有找到
+        if not strategy_data:
+            error_msg = f"未找到策略: {strategy_id}"
+            logger.error(error_msg)
+            result['error'] = error_msg
+            return result
+            
+        # 如果名称仍为空，使用默认名称
+        if not strategy_name:
+            strategy_name = '未命名策略'
+            logger.warning(f"无法获取策略名称，使用默认名称: {strategy_name}")
+
+        result['strategy_name'] = strategy_name
+
+        logger.info(f"开始运行回测，策略: {strategy_name} (ID: {strategy_id})，监听时间: {listen_time}秒")
+
         # 如果提供了自定义参数，修改策略
         modified = False
 
@@ -1314,9 +1337,6 @@ def run_backtest(
             logger.error(error_msg)
             result['error'] = error_msg
             return result
-
-        # 创建MQTT客户端
-        mqtt_client = MQTTBacktestClient()
 
         # 连接MQTT服务器
         if not mqtt_client.connect(mqtt_info):
