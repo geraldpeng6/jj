@@ -87,7 +87,8 @@ def get_symbol_info(full_name: str) -> Optional[Dict[str, Any]]:
         return None
 
 
-def search_symbols(query: str, exchange: str = "ANY", symbol_type: str = "") -> Optional[List[Dict[str, Any]]]:
+def search_symbols(query: str, exchange: str = "ANY", symbol_type: str = "", limit: int = 50, 
+                  sort_by: str = "symbol", sort_order: str = "asc") -> Optional[List[Dict[str, Any]]]:
     """
     搜索证券符号，支持通过代码或名称进行搜索，包括股票、指数、基金等各种证券类型
 
@@ -95,6 +96,9 @@ def search_symbols(query: str, exchange: str = "ANY", symbol_type: str = "") -> 
         query: 搜索关键词，可以是证券代码或名称
         exchange: 交易所代码，默认为"ANY"表示所有交易所
         symbol_type: 证券类型，默认为空字符串表示所有类型，可选值包括"stock"(股票)、"index"(指数)、"fund"(基金)等
+        limit: 返回结果的最大数量，默认为50
+        sort_by: 排序字段，默认为"symbol"，可选值包括"symbol"、"exchange"、"type"、"description"
+        sort_order: 排序顺序，默认为"asc"升序，可选值为"desc"降序
 
     Returns:
         Optional[List[Dict[str, Any]]]: 搜索结果列表，每个结果包含证券代码、名称、类型等信息，搜索失败时返回None
@@ -148,7 +152,19 @@ def search_symbols(query: str, exchange: str = "ANY", symbol_type: str = "") -> 
 
             if data.get('code') == 1 and data.get('msg') == 'ok':
                 symbols = data.get('data', [])
-                logger.info(f"搜索证券成功，找到 {len(symbols)} 个结果")
+                total_count = len(symbols)
+                logger.info(f"搜索证券成功，找到 {total_count} 个结果")
+                
+                # 按指定字段排序
+                if sort_by in ["symbol", "exchange", "type", "description"]:
+                    reverse = sort_order.lower() == "desc"
+                    symbols.sort(key=lambda x: x.get(sort_by, ""), reverse=reverse)
+                
+                # 限制返回的结果数量
+                if limit > 0 and len(symbols) > limit:
+                    logger.info(f"结果数量已限制为 {limit}，总结果数: {total_count}")
+                    return symbols[:limit]
+                
                 return symbols
             else:
                 logger.error(f"搜索证券失败: {data}")
