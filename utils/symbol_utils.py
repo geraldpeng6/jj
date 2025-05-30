@@ -89,15 +89,15 @@ def get_symbol_info(full_name: str) -> Optional[Dict[str, Any]]:
 
 def search_symbols(query: str, exchange: str = "ANY", symbol_type: str = "") -> Optional[List[Dict[str, Any]]]:
     """
-    搜索股票符号，支持通过股票代码或名称进行搜索
+    搜索证券符号，支持通过代码或名称进行搜索，包括股票、指数、基金等各种证券类型
 
     Args:
-        query: 搜索关键词，可以是股票代码或名称
+        query: 搜索关键词，可以是证券代码或名称
         exchange: 交易所代码，默认为"ANY"表示所有交易所
-        symbol_type: 股票类型，默认为空字符串表示所有类型
+        symbol_type: 证券类型，默认为空字符串表示所有类型，可选值包括"stock"(股票)、"index"(指数)、"fund"(基金)等
 
     Returns:
-        Optional[List[Dict[str, Any]]]: 搜索结果列表，每个结果包含股票代码、名称等信息，搜索失败时返回None
+        Optional[List[Dict[str, Any]]]: 搜索结果列表，每个结果包含证券代码、名称、类型等信息，搜索失败时返回None
     """
     # 加载认证配置
     if not load_auth_config():
@@ -123,34 +123,46 @@ def search_symbols(query: str, exchange: str = "ANY", symbol_type: str = "") -> 
         "user_id": user_id
     }
 
+    # 获取基本请求头
     headers = get_headers()
+    
+    # 确保能处理brotli压缩格式
+    custom_headers = headers.copy()
+    custom_headers['Accept-Encoding'] = 'gzip, deflate, br'
+    
     logger.debug(f"发送GET请求到: {url}")
     logger.debug(f"请求参数: {params}")
-    logger.debug(f"请求头: {headers}")
+    logger.debug(f"请求头: {custom_headers}")
 
     try:
-        response = requests.get(url, params=params, headers=headers)
+        response = requests.get(url, params=params, headers=custom_headers)
         response.raise_for_status()
-        data = response.json()
+        
+        # 记录响应头中的内容编码格式
+        content_encoding = response.headers.get('Content-Encoding', 'none')
+        logger.debug(f"响应使用的编码格式: {content_encoding}")
+        
+        try:
+            data = response.json()  # requests自动处理解压缩
+            logger.debug(f"收到响应: {data}")
 
-        logger.debug(f"收到响应: {data}")
-
-        if data.get('code') == 1 and data.get('msg') == 'ok':
-            symbols = data.get('data', [])
-            logger.info(f"搜索股票成功，找到 {len(symbols)} 个结果")
-            return symbols
-        else:
-            logger.error(f"搜索股票失败: {data}")
+            if data.get('code') == 1 and data.get('msg') == 'ok':
+                symbols = data.get('data', [])
+                logger.info(f"搜索证券成功，找到 {len(symbols)} 个结果")
+                return symbols
+            else:
+                logger.error(f"搜索证券失败: {data}")
+                return None
+        except json.JSONDecodeError as e:
+            logger.error(f"解析响应JSON失败: {e}")
+            logger.error(f"响应内容预览: {response.text[:100] if response.text else '空响应'}")
             return None
 
     except requests.exceptions.RequestException as e:
         logger.error(f"请求失败: {e}")
         return None
-    except json.JSONDecodeError as e:
-        logger.error(f"解析响应JSON失败: {e}")
-        return None
     except Exception as e:
-        logger.error(f"搜索股票时发生未知错误: {e}")
+        logger.error(f"搜索证券时发生未知错误: {e}")
         return None
 
 
