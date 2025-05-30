@@ -920,7 +920,7 @@ def extract_backtest_params(strategy_data: Dict[str, Any], custom_start_date: Op
         return params
 
 
-def extract_buy_sell_points(position_data: List[Dict[str, Any]]) -> Tuple[List[List[Any]], List[List[Any]]]:
+def extract_buy_sell_points(position_data: List[Dict[str, Any]]) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
     """
     从回测结果中提取买入卖出点，通过分析持仓变化来确定
 
@@ -928,9 +928,9 @@ def extract_buy_sell_points(position_data: List[Dict[str, Any]]) -> Tuple[List[L
         position_data: 回测结果数据
 
     Returns:
-        Tuple[List[List[Any]], List[List[Any]]]: (buy_points, sell_points)
-            buy_points: 买入点列表，格式为 [[index, price, time], ...]
-            sell_points: 卖出点列表，格式为 [[index, price, time], ...]
+        Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]: (buy_points, sell_points)
+            buy_points: 买入点列表，格式为 [{symbol, price, time, size, amount}, ...]
+            sell_points: 卖出点列表，格式为 [{symbol, price, time, size, amount}, ...]
     """
     buy_points = []
     sell_points = []
@@ -950,7 +950,7 @@ def extract_buy_sell_points(position_data: List[Dict[str, Any]]) -> Tuple[List[L
             if not timestamp:
                 continue
 
-            # 转换时间戳为日期时间
+            # 转换时间戳为日期时间（注意：使用本地时区）
             try:
                 trade_time = datetime.fromtimestamp(timestamp / 1000).strftime('%Y-%m-%d %H:%M:%S')
             except:
@@ -965,13 +965,15 @@ def extract_buy_sell_points(position_data: List[Dict[str, Any]]) -> Tuple[List[L
                     continue
 
                 symbol = position.get('symbol', '')
-                if not symbol:
+                if not symbol or position.get('category', 0) != 1:  # 只处理股票类别
                     continue
 
                 # 获取当前持仓数量和价格
                 current_size = position.get('size', 0)
-                price = position.get('price', 0)
-
+                
+                # 优先使用pprice（实际成交价），而不是price（市场价格）
+                price = position.get('pprice', position.get('price', 0))
+                
                 # 如果是新股票，初始化持仓记录
                 if symbol not in symbol_positions:
                     symbol_positions[symbol] = 0
@@ -981,15 +983,41 @@ def extract_buy_sell_points(position_data: List[Dict[str, Any]]) -> Tuple[List[L
 
                 # 持仓增加，表示买入
                 if current_size > prev_size and current_size > 0:
-                    # 添加买入点 [x轴索引, 价格, 时间]
-                    buy_points.append([item_index, price, trade_time])
-                    logger.debug(f"检测到买入点: {symbol}, 价格: {price}, 时间: {trade_time}")
+                    # 计算交易数量和金额
+                    trade_size = current_size - prev_size
+                    trade_amount = trade_size * price
+                    
+                    # 添加买入点，使用字典结构存储更多信息
+                    buy_point = {
+                        'index': item_index,
+                        'symbol': symbol,
+                        'price': price,
+                        'time': trade_time,
+                        'size': trade_size,
+                        'amount': trade_amount,
+                        'symbol_name': position.get('symbol_name', '')
+                    }
+                    buy_points.append(buy_point)
+                    logger.debug(f"检测到买入点: {symbol}, 价格: {price}, 数量: {trade_size}, 金额: {trade_amount:.2f}, 时间: {trade_time}")
 
                 # 持仓减少，表示卖出
                 elif current_size < prev_size and prev_size > 0:
-                    # 添加卖出点 [x轴索引, 价格, 时间]
-                    sell_points.append([item_index, price, trade_time])
-                    logger.debug(f"检测到卖出点: {symbol}, 价格: {price}, 时间: {trade_time}")
+                    # 计算交易数量和金额
+                    trade_size = prev_size - current_size
+                    trade_amount = trade_size * price
+                    
+                    # 添加卖出点，使用字典结构存储更多信息
+                    sell_point = {
+                        'index': item_index,
+                        'symbol': symbol,
+                        'price': price,
+                        'time': trade_time,
+                        'size': trade_size,
+                        'amount': trade_amount,
+                        'symbol_name': position.get('symbol_name', '')
+                    }
+                    sell_points.append(sell_point)
+                    logger.debug(f"检测到卖出点: {symbol}, 价格: {price}, 数量: {trade_size}, 金额: {trade_amount:.2f}, 时间: {trade_time}")
 
                 # 更新持仓记录
                 symbol_positions[symbol] = current_size

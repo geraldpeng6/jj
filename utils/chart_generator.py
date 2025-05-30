@@ -626,6 +626,13 @@ def extract_buy_sell_points(backtest_data: List[Dict[str, Any]]) -> Dict[str, Di
                     size_change = curr_size - prev_size
                     # 估算买入金额（如果现金减少，使用现金变化的绝对值；否则使用持仓价值变化）
                     buy_amount = abs(cash_change) if cash_change < 0 else (curr_price * size_change)
+                    
+                    # 确保金额计算正确 - 使用价格乘以数量作为标准计算方式
+                    # 如果使用现金变化值显著小于标准计算方式（差异超过20%），则使用标准计算方式
+                    standard_amount = curr_price * size_change
+                    if buy_amount < standard_amount * 0.8:
+                        logger.warning(f"买入金额计算异常: 使用现金变化估算值 {buy_amount} 与标准计算值 {standard_amount} 差异过大，使用标准计算值")
+                        buy_amount = standard_amount
 
                     # 添加买入点
                     trade_points[symbol]['buy_timestamps'].append(curr_ts)
@@ -656,6 +663,12 @@ def extract_buy_sell_points(backtest_data: List[Dict[str, Any]]) -> Dict[str, Di
 
                     # 估算卖出金额（如果现金增加，使用现金变化；否则使用持仓价值）
                     sell_amount = cash_change if cash_change > 0 else (prev_price * prev_size)
+                    
+                    # 确保金额计算正确 - 使用价格乘以数量作为标准计算方式
+                    standard_amount = prev_price * prev_size
+                    if sell_amount < standard_amount * 0.8 or sell_amount > standard_amount * 1.2:
+                        logger.warning(f"卖出金额计算异常: 使用现金变化估算值 {sell_amount} 与标准计算值 {standard_amount} 差异过大，使用标准计算值")
+                        sell_amount = standard_amount
 
                     # 添加卖出点
                     trade_points[symbol]['sell_timestamps'].append(curr_ts)
@@ -671,8 +684,14 @@ def extract_buy_sell_points(backtest_data: List[Dict[str, Any]]) -> Dict[str, Di
                     size_change = prev_size - curr_size
                     curr_price = curr_positions[symbol]['price']
 
-                    # 估算卖出金额
+                    # 估算卖出金额（如果现金增加，使用现金变化；否则使用持仓价值）
                     sell_amount = cash_change if cash_change > 0 else (curr_price * size_change)
+                    
+                    # 确保金额计算正确 - 使用价格乘以数量作为标准计算方式
+                    standard_amount = curr_price * size_change
+                    if sell_amount < standard_amount * 0.8 or sell_amount > standard_amount * 1.2:
+                        logger.warning(f"部分卖出金额计算异常: 使用现金变化估算值 {sell_amount} 与标准计算值 {standard_amount} 差异过大，使用标准计算值")
+                        sell_amount = standard_amount
 
                     # 添加卖出点
                     trade_points[symbol]['sell_timestamps'].append(curr_ts)
