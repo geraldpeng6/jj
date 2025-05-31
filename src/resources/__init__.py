@@ -16,5 +16,8 @@ def register_all_resources(mcp: FastMCP):
     Args:
         mcp: MCP服务器实例
     """
-    # 资源已被移除
-    pass
+    # 导入资源模块
+    from src.resources.hitrader_resource import register_resources as register_hitrader_resources
+    
+    # 注册HiTrader文档资源
+    register_hitrader_resources(mcp)
