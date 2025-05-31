@@ -548,6 +548,41 @@ class HiTraderDocs:
         except Exception as e:
             logger.error(f"获取HiTrader文档时发生错误: {e}")
             return f"获取文档时发生错误: {e}"
+            
+    @staticmethod
+    async def get_hitrader_search() -> str:
+        """
+        获取HiTrader文档目录
+        
+        当不带参数请求search资源时，该方法返回文档目录。
+        """
+        return HiTraderDocs._load_toc()
+        
+    @staticmethod
+    async def get_hitrader_search_by_query(query: str) -> str:
+        """
+        按关键词搜索HiTrader文档
+        
+        Args:
+            query (str): 搜索关键词
+            
+        Returns:
+            str: 搜索结果
+        """
+        return await HiTraderDocs.get_hitrader_docs(query=query)
+        
+    @staticmethod
+    async def get_hitrader_search_by_section(section: str) -> str:
+        """
+        获取HiTrader指定章节内容
+        
+        Args:
+            section (str): 章节名称
+            
+        Returns:
+            str: 章节内容
+        """
+        return await HiTraderDocs.get_hitrader_docs(section=section)
     
     @staticmethod
     async def get_hitrader_syntax(
@@ -645,44 +680,17 @@ def register_resources(mcp: FastMCP):
     """
     注册HiTrader文档资源到MCP服务器
     
-    该函数将HiTraderDocs类中的各种文档访问方法注册为MCP资源，使它们可以通过MCP框架
-    被调用。注册后，这些资源可以在MCP客户端中使用。
-    
-    注册的资源包括:
-        - get_hitrader_toc: 获取文档目录
-        - get_hitrader_full_doc: 获取完整文档
-        - get_hitrader_chapter: 获取指定章节内容
-        - get_hitrader_docs: 搜索文档或获取章节
-        - get_hitrader_syntax: 获取特定功能的语法说明
-    
     Args:
-        mcp (FastMCP): MCP服务器实例，用于注册资源。
-    
-    使用示例:
-        ```python
-        from mcp.server.fastmcp import FastMCP
-        
-        # 创建MCP服务器实例
-        mcp = FastMCP("HiTrader文档服务")
-        
-        # 注册资源
-        register_resources(mcp)
-        
-        # 启动服务器
-        mcp.run()
-        ```
+        mcp: MCP服务器实例
     """
-    # 注册目录资源
-    mcp.resource()(HiTraderDocs.get_hitrader_toc)
+    # 添加日志记录
+    logger.info("注册HiTrader文档资源")
     
-    # 注册完整文档资源
-    mcp.resource()(HiTraderDocs.get_hitrader_full_doc)
-    
-    # 注册章节资源
-    mcp.resource()(HiTraderDocs.get_hitrader_chapter)
-    
-    # 注册文档搜索资源
-    mcp.resource()(HiTraderDocs.get_hitrader_docs)
-    
-    # 注册语法资源
-    mcp.resource()(HiTraderDocs.get_hitrader_syntax) 
+    # 注册HiTrader文档资源 - 使用类的静态方法而不是类本身
+    mcp.resource("hitrader://docs/toc")(HiTraderDocs.get_hitrader_toc)
+    mcp.resource("hitrader://docs/full")(HiTraderDocs.get_hitrader_full_doc)
+    mcp.resource("hitrader://docs/chapter/{chapter}")(HiTraderDocs.get_hitrader_chapter)
+    mcp.resource("hitrader://docs/search")(HiTraderDocs.get_hitrader_search)
+    mcp.resource("hitrader://docs/search/query/{query}")(HiTraderDocs.get_hitrader_search_by_query)
+    mcp.resource("hitrader://docs/search/section/{section}")(HiTraderDocs.get_hitrader_search_by_section)
+    mcp.resource("hitrader://docs/syntax/{feature}")(HiTraderDocs.get_hitrader_syntax)

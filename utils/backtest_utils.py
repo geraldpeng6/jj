@@ -837,6 +837,11 @@ def extract_symbols_from_strategy(strategy_data: Dict[str, Any]) -> List[Dict[st
             error_msg = "未能成功提取任何有效的股票代码"
             logger.error(error_msg)
             raise ValueError(error_msg)
+            
+        # 检查多股情况下是否设置了基准标的
+        if len(symbols) > 1:
+            # 验证是否有设置benchmark
+            validate_multiple_stocks_benchmark(choose_stock_code)
 
         return symbols
     except Exception as e:
@@ -848,6 +853,29 @@ def extract_symbols_from_strategy(strategy_data: Dict[str, Any]) -> List[Dict[st
             error_msg = f"提取股票代码异常: {e}"
             logger.error(error_msg)
             raise ValueError(error_msg)
+
+
+def validate_multiple_stocks_benchmark(choose_stock_code: str) -> None:
+    """
+    验证多股票情况下是否设置了基准标的
+    
+    Args:
+        choose_stock_code: 选股代码
+    
+    Raises:
+        ValueError: 如果多股票情况下没有设置基准标的
+    """
+    # 使用正则表达式查找是否设置了基准标的
+    benchmark_pattern = r'context\.benchmark\s*=\s*["\']([^"\']+)["\']'
+    benchmark_match = re.search(benchmark_pattern, choose_stock_code)
+    
+    if not benchmark_match:
+        error_msg = "多股情况下必须指定基准标的！"
+        logger.error(error_msg)
+        raise ValueError(error_msg)
+    
+    logger.info(f"多股情况下检测到基准标的: {benchmark_match.group(1)}")
+    return
 
 
 def extract_backtest_params(strategy_data: Dict[str, Any], custom_start_date: Optional[str] = None,
@@ -1121,12 +1149,14 @@ def format_choose_stock(symbol_str: str) -> str:
     # 构建格式化的股票代码列表字符串
     if len(formatted_symbols) == 1:
         symbol_list_str = f'["{formatted_symbols[0]}"]'
+        return f'def choose_stock(context):\n    """标的"""\n    context.symbol_list = {symbol_list_str}\n'
     else:
         # 对于多个股票，使用格式 ["000001.XSHG", "510300.XSHG"]
         symbol_list_items = [f'"{symbol}"' for symbol in formatted_symbols]
         symbol_list_str = f'[{", ".join(symbol_list_items)}]'
-
-    return f'def choose_stock(context):\n    """标的"""\n    context.symbol_list = {symbol_list_str}\n'
+        # 对于多股情况，需要添加基准标的
+        # 使用沪深300作为默认基准
+        return f'def choose_stock(context):\n    """标的"""\n    # 设置基准标的（多股情况下必须设置）\n    context.benchmark = "000300.XSHG"  # 默认使用沪深300作为基准\n    context.symbol_list = {symbol_list_str}\n'
 
 
 def run_backtest(

@@ -22,6 +22,7 @@ def register_all_tools(mcp: FastMCP):
     from src.tools.strategy_tools import register_tools as register_strategy_tools
     from src.tools.backtest_tools import register_tools as register_backtest_tools
     from src.tools.backtest_history_tools import register_tools as register_backtest_history_tools
+    from src.tools.ai_strategy_tools import register_tools as register_ai_strategy_tools
 
     # 注册K线数据工具
     register_kline_tools(mcp)
@@ -37,3 +38,6 @@ def register_all_tools(mcp: FastMCP):
     
     # 注册回测历史记录工具
     register_backtest_history_tools(mcp)
+    
+    # 注册AI策略生成工具
+    register_ai_strategy_tools(mcp)
