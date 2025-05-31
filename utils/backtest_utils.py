@@ -162,7 +162,15 @@ def send_backtest_request(
     mqtt_info: Dict[str, Any],
     strategy_data: Optional[Dict[str, Any]] = None,
     start_date: Optional[str] = None,
-    end_date: Optional[str] = None
+    end_date: Optional[str] = None,
+    capital: int = 200000,
+    order: int = 500,
+    resolution: str = "1D",
+    fq: str = "post",
+    commission: float = 0.0003,
+    margin: float = 0.05,
+    riskfreerate: float = 0.01,
+    pyramiding: int = 1
 ) -> Optional[str]:
     """
     发送回测请求
@@ -173,6 +181,14 @@ def send_backtest_request(
         strategy_data: 策略数据，可选，如果提供则使用此数据而不是从API获取
         start_date: 回测开始日期，格式为 "YYYY-MM-DD"，可选，默认为一年前
         end_date: 回测结束日期，格式为 "YYYY-MM-DD"，可选，默认为今天
+        capital: 初始资金，默认200000元
+        order: 每笔交易数量，默认500股
+        resolution: 数据频次，如 "1D"(日线)、"1m"(1分钟线)等
+        fq: 复权方式，"post"(后复权)、"pre"(前复权)、"none"(不复权)
+        commission: 手续费率，默认0.0003(0.03%)
+        margin: 保证金比率，默认0.05(5%)
+        riskfreerate: 无风险利率，默认0.01(1%)
+        pyramiding: 金字塔加仓次数，默认1次
 
     Returns:
         Optional[str]: 回测token，如果请求失败则返回None
@@ -225,21 +241,43 @@ def send_backtest_request(
 
         # 加载代理配置
         proxies, _ = load_proxy_config()
+        
+        # 格式化分辨率
+        resolution = normalize_resolution(resolution)
+        
+        # 格式化复权方式
+        if fq.lower() in ["pre", "前复权"]:
+            fq = "pre"
+        elif fq.lower() in ["post", "后复权"]:
+            fq = "post"
+        elif fq.lower() in ["none", "不复权", "无复权"]:
+            fq = "none"
+
+        # 根据分辨率确定频率
+        frequency = "D"  # 默认为日频率
+        if resolution[-1] == "S":
+            frequency = "S"  # 秒级
+        elif resolution[-1] == "M":
+            frequency = "M"  # 分钟级
+        elif resolution[-1] == "H":
+            frequency = "H"  # 小时级
+        elif resolution[-1] in ["D", "W"]:
+            frequency = "D"  # 日级/周级
 
         # 构建请求数据
         data = {
             "strategy_name": "双均线策略",
             "message": {
                 "title": "双均线策略",
-                "riskfreerate": 0.01,
-                "capital": 200000,
-                "order": 500,
-                "margin": 0.05,
-                "commission": 0.0003,
-                "pyramiding": 1,
+                "riskfreerate": riskfreerate,
+                "capital": capital,
+                "order": order,
+                "margin": margin,
+                "commission": commission,
+                "pyramiding": pyramiding,
                 "currency": "CNY",
-                "fq": "post",
-                "resolution": "1D",
+                "fq": fq,
+                "resolution": resolution,
                 # 使用已处理好的时间戳
                 "rangTime": [start_timestamp, end_timestamp],
                 "startDate": start_date,
@@ -273,7 +311,7 @@ def send_backtest_request(
     """风控"""
     pass
 ''',
-                "frequency": "D",
+                "frequency": frequency,
                 "time_range": [f"{start_date} 00:00:00", f"{end_date} 23:59:59"],
                 "env": "prod",
                 "size": 500,
@@ -1159,6 +1197,46 @@ def format_choose_stock(symbol_str: str) -> str:
         return f'def choose_stock(context):\n    """标的"""\n    # 设置基准标的（多股情况下必须设置）\n    context.benchmark = "000300.XSHG"  # 默认使用沪深300作为基准\n    context.symbol_list = {symbol_list_str}\n'
 
 
+def normalize_resolution(resolution: str) -> str:
+    """
+    将用户友好的分辨率格式化为API需要的格式
+    
+    Args:
+        resolution: 用户输入的分辨率，例如 "1s", "1m", "1h", "1d", 等
+    
+    Returns:
+        str: 格式化后的分辨率，例如 "1S", "1M", "1H", "1D", 等
+    """
+    # 如果为空，返回默认值
+    if not resolution:
+        return "1D"
+    
+    # 将分辨率转换为小写，便于处理
+    res_lower = resolution.lower()
+    
+    # 提取数字部分和单位部分
+    import re
+    match = re.match(r'(\d+)([smhdwmy])', res_lower)
+    if match:
+        number, unit = match.groups()
+        # 转换单位为大写
+        unit_map = {
+            's': 'S',  # 秒
+            'm': 'M',  # 分钟
+            'h': 'H',  # 小时
+            'd': 'D',  # 天
+            'w': 'W',  # 周
+            'y': 'Y'   # 年
+        }
+        
+        if unit in unit_map:
+            return f"{number}{unit_map[unit]}"
+    
+    # 如果输入格式不匹配或单位不识别，尝试直接返回
+    # 这允许使用API原生格式，如 "1D", "5M" 等
+    return resolution
+
+
 def run_backtest(
     strategy_id: str,
     listen_time: int = 30,
@@ -1168,7 +1246,16 @@ def run_backtest(
     control_risk: Optional[str] = None,
     timing: Optional[str] = None,
     choose_stock: Optional[str] = None,
-    timestamp: Optional[str] = None
+    timestamp: Optional[str] = None,
+    capital: int = 200000,
+    order: int = 500,
+    resolution: str = "1D",  # 数据频次：1s, 3s, 5s, 1m, 5m, 15m, 30m, 1h, 2h, 1D, 2D, 3D, 1W, 3W, 1M, 6M
+    fq: str = "post",  # 复权方式：post(后复权), pre(前复权), none(不复权)
+    commission: float = 0.0003,  # 手续费率：0.03%
+    margin: float = 0.05,  # 保证金比率：5%
+    riskfreerate: float = 0.01,  # 无风险利率：1%
+    pyramiding: int = 1,  # 金字塔加仓次数
+    strategy_data: Optional[Dict[str, Any]] = None  # 直接提供策略数据，用于测试
 ) -> Dict[str, Any]:
     """
     运行回测并监听position数据
@@ -1183,6 +1270,15 @@ def run_backtest(
         timing: 自定义择时代码，可选
         choose_stock: 自定义标的代码或股票代码，可选
         timestamp: 时间戳，用于生成图表文件名，可选，如果不提供则自动生成
+        capital: 初始资金，默认200000元
+        order: 每笔交易数量，默认500股
+        resolution: 数据频次，如 "1D"(日线)、"1m"(1分钟线)等
+        fq: 复权方式，"post"(后复权)、"pre"(前复权)、"none"(不复权)
+        commission: 手续费率，默认0.0003(0.03%)
+        margin: 保证金比率，默认0.05(5%)
+        riskfreerate: 无风险利率，默认0.01(1%)
+        pyramiding: 金字塔加仓次数，默认1次
+        strategy_data: 直接提供策略数据，用于测试，如果提供则不再从API获取策略
 
     Returns:
         Dict[str, Any]: 回测结果，包含以下字段：
@@ -1194,6 +1290,17 @@ def run_backtest(
             - chart_path: 生成的图表路径
             - error: 错误信息（如果有）
     """
+    # 格式化分辨率
+    resolution = normalize_resolution(resolution)
+    
+    # 格式化复权方式
+    if fq.lower() in ["pre", "前复权"]:
+        fq = "pre"
+    elif fq.lower() in ["post", "后复权"]:
+        fq = "post"
+    elif fq.lower() in ["none", "不复权", "无复权"]:
+        fq = "none"
+    
     result = {
         'success': False,
         'strategy_id': strategy_id,
@@ -1212,6 +1319,16 @@ def run_backtest(
             'listing_date': None,
             'last_date': None,
             'messages': []
+        },
+        'parameters': {
+            'capital': capital,
+            'order': order,
+            'resolution': resolution,
+            'fq': fq,
+            'commission': commission,
+            'margin': margin,
+            'riskfreerate': riskfreerate,
+            'pyramiding': pyramiding
         }
     }
 
@@ -1229,42 +1346,49 @@ def run_backtest(
 
         # 从API获取策略详情
         from utils.strategy_utils import get_strategy_detail
-        strategy_data = get_strategy_detail(strategy_id)
-        strategy_name = None
         
+        # 如果直接提供了策略数据，使用提供的数据
         if strategy_data:
-            # 优先使用用户策略的名称
-            strategy_name = strategy_data.get('name') or strategy_data.get('strategy_name')
-            if strategy_name:
-                logger.info(f"从用户策略库获取到策略名称: {strategy_name}")
-            else:
-                logger.info(f"用户策略存在但没有名称，尝试从策略库获取")
-        
-        # 如果没有从用户策略获取到名称，尝试从策略库获取
-        if not strategy_name:
-            # 尝试从系统策略库获取
-            # 注意: 实际上get_strategy_detail已经自动检查了用户策略和策略库
-            # 这段代码不会被执行，因为get_strategy_detail已经返回了所有可能的结果
-            # 保留这段代码是为了向后兼容
-            library_strategy = None  # 不需要再次调用get_strategy_detail
-            if library_strategy:
-                strategy_name = library_strategy.get('name') or library_strategy.get('strategy_name')
-                logger.info(f"从系统策略库获取到策略名称: {strategy_name}")
-                # 如果之前没有获取到策略数据，使用库策略数据
-                if not strategy_data:
-                    strategy_data = library_strategy
-        
-        # 如果仍然没有获取到策略数据，说明两处都没有找到
-        if not strategy_data:
-            error_msg = f"未找到策略: {strategy_id}"
-            logger.error(error_msg)
-            result['error'] = error_msg
-            return result
+            strategy_name = strategy_data.get('name') or strategy_data.get('strategy_name') or '自定义策略'
+            logger.info(f"使用提供的策略数据: {strategy_name}")
+        else:
+            # 否则从API获取策略详情
+            strategy_data = get_strategy_detail(strategy_id)
+            strategy_name = None
             
-        # 如果名称仍为空，使用默认名称
-        if not strategy_name:
-            strategy_name = '未命名策略'
-            logger.warning(f"无法获取策略名称，使用默认名称: {strategy_name}")
+            if strategy_data:
+                # 优先使用用户策略的名称
+                strategy_name = strategy_data.get('name') or strategy_data.get('strategy_name')
+                if strategy_name:
+                    logger.info(f"从用户策略库获取到策略名称: {strategy_name}")
+                else:
+                    logger.info(f"用户策略存在但没有名称，尝试从策略库获取")
+            
+            # 如果没有从用户策略获取到名称，尝试从策略库获取
+            if not strategy_name:
+                # 尝试从系统策略库获取
+                # 注意: 实际上get_strategy_detail已经自动检查了用户策略和策略库
+                # 这段代码不会被执行，因为get_strategy_detail已经返回了所有可能的结果
+                # 保留这段代码是为了向后兼容
+                library_strategy = None  # 不需要再次调用get_strategy_detail
+                if library_strategy:
+                    strategy_name = library_strategy.get('name') or library_strategy.get('strategy_name')
+                    logger.info(f"从系统策略库获取到策略名称: {strategy_name}")
+                    # 如果之前没有获取到策略数据，使用库策略数据
+                    if not strategy_data:
+                        strategy_data = library_strategy
+            
+            # 如果仍然没有获取到策略数据，说明两处都没有找到
+            if not strategy_data:
+                error_msg = f"未找到策略: {strategy_id}"
+                logger.error(error_msg)
+                result['error'] = error_msg
+                return result
+                
+            # 如果名称仍为空，使用默认名称
+            if not strategy_name:
+                strategy_name = '未命名策略'
+                logger.warning(f"无法获取策略名称，使用默认名称: {strategy_name}")
 
         result['strategy_name'] = strategy_name
 
@@ -1412,7 +1536,15 @@ def run_backtest(
             mqtt_info=mqtt_info,
             strategy_data=strategy_data,
             start_date=start_date,
-            end_date=end_date
+            end_date=end_date,
+            capital=capital,
+            order=order,
+            resolution=resolution,
+            fq=fq,
+            commission=commission,
+            margin=margin,
+            riskfreerate=riskfreerate,
+            pyramiding=pyramiding
         )
 
         if not backtest_token:
@@ -1485,6 +1617,9 @@ def run_backtest(
 
             # 提取回测参数，优先使用传入的自定义时间范围（可能已经过验证调整）
             backtest_params = extract_backtest_params(strategy_data, start_date, end_date)
+            # 使用传入的参数覆盖从策略中提取的参数
+            backtest_params['resolution'] = resolution
+            backtest_params['fq'] = fq
 
             # 提取买入卖出点
             buy_points, sell_points = extract_buy_sell_points(mqtt_client.position_data)
