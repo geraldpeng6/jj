@@ -43,7 +43,8 @@ setup_html_server() {
     
     # 创建配置目录
     mkdir -p data/config
-    # 设置当前工作目录权限，确保服务可以访问
+    # 设置上层目录权限，确保服务可以访问
+    chmod 755 $(dirname $(pwd))
     chmod 755 $(pwd)
     chmod -R 755 data/
     
