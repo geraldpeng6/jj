@@ -1,6 +1,6 @@
 # 量化交易助手 MCP 服务器依赖
 # 核心依赖
-mcp==1.9.2  # Model Context Protocol
+mcp>=1.0.0  # Model Context Protocol
 pandas==2.2.3
 requests==2.32.3
 jinja2==3.1.6
